@@ -131,7 +131,7 @@ void hd_close(int device)
 void hd_rdwt(MESSAGE * p)
 {
 	int drive = DRV_OF_DEV(p->DEVICE);
-
+	
 	u64 pos = p->POSITION;
 
 	//We only allow to R/W from a SECTOR boundary:
