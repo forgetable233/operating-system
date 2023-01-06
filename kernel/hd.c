@@ -31,7 +31,7 @@ struct part_ent PARTITION_ENTRY;
 static HDQueue hdque;
 static volatile int hd_int_waiting_flag;
 static	u8 hd_status;
-static	u8 hdbuf[SECTOR_SIZE * 2];
+static	u8 hdbuf[SECTOR_SIZE * 2];  // 这实际上是硬盘缓冲区，也就是我们需要优化的地方
 //static	struct hd_info hd_info[1];
 struct hd_info hd_info[1];		//modified by mingxuan 2020-10-27
 
@@ -57,6 +57,71 @@ static int  waitfor(int mask, int val, int timeout);
 			 dev / NR_PRIM_PER_DRIVE : \
 			 (dev - MINOR_hd1a) / NR_SUB_PER_DRIVE)
 
+u8 buf_cache[1024][512];  // 缓冲区定义
+
+struct buf_head
+{
+	bool busy;            // 该缓冲块是否被使用
+	int dev, block;     // 设备号，扇区号(只有busy=true时才有效)
+	void* pos;            // 该缓冲块的起始地址
+	struct buf_head* nxt; // 指向下一个缓冲块头部
+};
+
+struct buf_head* head;
+
+void init_buf()
+{
+	head = kmalloc(sizeof(struct buf_head));
+	head = NULL;
+	for (int i = 0; i < 1024; i ++ )
+	{
+		struct buf_head* bh = kmalloc(sizeof(struct buf_head));
+		bh->busy = false;
+		bh->pos = (void*)buf_cache[i];
+		bh->nxt = head->nxt;
+		head->nxt = bh;
+	}
+}
+
+struct buf_head* get_free_buf(int dev, int block)
+{
+	for (struct buf_head* bh = head; bh != NULL; bh = bh->nxt)
+	{
+		if (bh->busy == false && bh->dev == dev && bh->block == block)
+			return bh;
+	}
+	return NULL;
+}
+
+void grow_buf(int dev, int block)
+{
+	for (struct buf_head* bh = head; bh != NULL; bh = bh->nxt)
+	{
+		if (bh->busy == false)
+		{
+			bh->dev = dev;
+			bh->block = block;
+			return;
+		}
+	}
+
+	// 如果当前没有空闲的缓冲块，则将其中一个缓冲块写入磁盘
+	
+}
+
+struct buf_head* getblk(int dev, int block)
+{
+	for (;;)
+	{
+		struct buf_head* bh;
+		bh = get_free_buf(dev, block);
+		if (bh)
+			return bh;
+		else
+			grow_buf(dev, block);
+	}
+}
+
 /*****************************************************************************
  *                                init_hd
  *****************************************************************************/
@@ -77,6 +142,7 @@ void init_hd()
 	hd_info[0].open_cnt = 0;
 	
 	init_hd_queue(&hdque);
+	init_buf();
 }
 
 /*****************************************************************************
