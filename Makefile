@@ -83,7 +83,7 @@ include fs_flags/Makefrag
 # FAT32镜像文件
 IMAGE = $(OBJDIR)/a.img
 BUILD_IMAGE_SCRIPT = build_img.sh
-
+ 
 # added by mingxuan 2020-9-12
 # Offset of os_boot in hd
 # 活动分区所在的扇区号
