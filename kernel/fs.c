@@ -390,6 +390,7 @@ int real_open(const char *pathname, int flags)	//modified by mingxuan 2019-5-17
 
 	int fd = do_open(&fs_msg);
 
+	kprintf("finish read\n");
 	return fd;
 }
 
