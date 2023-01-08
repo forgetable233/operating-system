@@ -57,7 +57,7 @@ static int  waitfor(int mask, int val, int timeout);
 			 dev / NR_PRIM_PER_DRIVE : \
 			 (dev - MINOR_hd1a) / NR_SUB_PER_DRIVE)
 
-u8 buf_cache[1024][512];  // 缓冲区定义
+u8 buf_cache[256][512];  // 缓冲区定义
 
 struct buf_head
 {
@@ -71,11 +71,11 @@ struct buf_head* head;
 
 void init_buf()
 {
-	head = kmalloc(sizeof(struct buf_head));
+	head = sys_kmalloc(sizeof(struct buf_head));
 	head = NULL;
 	for (int i = 0; i < 1024; i ++ )
 	{
-		struct buf_head* bh = kmalloc(sizeof(struct buf_head));
+		struct buf_head* bh = sys_kmalloc(sizeof(struct buf_head));
 		bh->busy = false;
 		bh->pos = (void*)buf_cache[i];
 		bh->nxt = head->nxt;
@@ -145,7 +145,7 @@ void init_hd()
 	init_buf();
 }
 
-/*****************************************************************************
+/*******************                                         **********************************************************
  *                                hd_open
  *****************************************************************************/
 /**
@@ -197,7 +197,7 @@ void hd_close(int device)
 void hd_rdwt(MESSAGE * p)
 {
 	int drive = DRV_OF_DEV(p->DEVICE);
-
+	
 	u64 pos = p->POSITION;
 
 	//We only allow to R/W from a SECTOR boundary:
