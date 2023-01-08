@@ -46,6 +46,7 @@ int real_write(int fd, const void *buf, int count); //注意:buf的类型被修�
 int real_unlink(const char *pathname);	//modified by mingxuan 2019-5-17
 int real_lseek(int fd, int offset, int whence);	  //modified by mingxuan 2019-5-17
 
+// 写磁盘接口
 static int rw_sector(int io_type, int dev, u64 pos, int bytes, int proc_nr, void* buf);
 static int rw_sector_sched(int io_type, int dev, int pos, int bytes, int proc_nr, void* buf);
 
@@ -379,6 +380,7 @@ static int rw_sector_sched(int io_type, int dev, int pos, int bytes, int proc_nr
 // static int real_open(const char *pathname, int flags)	//deleted by mingxuan 2019-5-17
 int real_open(const char *pathname, int flags)	//modified by mingxuan 2019-5-17
 {
+	// kprintf("enter the real open function\n");
 	//added by xw, 18/8/27
 	MESSAGE fs_msg;
 
@@ -390,7 +392,7 @@ int real_open(const char *pathname, int flags)	//modified by mingxuan 2019-5-17
 
 	int fd = do_open(&fs_msg);
 
-	kprintf("finish read\n");
+	// kprintf("\nfinish read\n");
 	return fd;
 }
 

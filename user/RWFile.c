@@ -2,12 +2,12 @@
 #include "fs.h"
 #include "vfs.h"
 
-const char* file_path = "dev_tty0/test.txt";
+const char* file_path = "dev_tty1/test.txt";
 
 
 int main(int arg, char *argv[])  {
-    printf("\nbegin to read file\n");
-    int fd = open(file_path, 1);
+    printf("begin to read file\n");
+    int fd = open(file_path, O_RDWR);
     if (fd == -1){
         printf("can not find the target file\n");
         return 0;
