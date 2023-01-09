@@ -86,9 +86,6 @@ static int rw_sector(int io_type, int dev, u64 pos, int bytes, int proc_nr, void
 	return 0;
 }
 
-<<<<<<< HEAD
-u8 buf_cache[256][512];  // 缓冲区定义
-=======
 
 /*****************************************************************************
  *                                init_buf
@@ -96,7 +93,6 @@ u8 buf_cache[256][512];  // 缓冲区定义
 
 u8 buf_cache[BUF_SIZE][SECTOR_SIZE];  // 缓冲区定义
 enum buf_state{CLEAN, UNUSED, DIRTY};   // 缓冲块状态，CLEAN表示缓冲块数据与磁盘数据同步，UNUSED表示数据尚未写入，数据无效；DIRTY表示缓冲块内为脏数据
->>>>>>> dcr_dev
 
 struct buf_head
 {
