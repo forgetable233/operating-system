@@ -31,7 +31,7 @@ struct part_ent PARTITION_ENTRY;
 static HDQueue hdque;
 static volatile int hd_int_waiting_flag;
 static	u8 hd_status;
-static	u8 hdbuf[SECTOR_SIZE * 2];  // 这实际上是硬盘缓冲区，也就是我们需要优化的地方
+static	u8 hdbuf[SECTOR_SIZE * 2];
 //static	struct hd_info hd_info[1];
 struct hd_info hd_info[1];		//modified by mingxuan 2020-10-27
 
@@ -53,15 +53,55 @@ static void hd_handler(int irq);
 static int  waitfor(int mask, int val, int timeout);
 //~xw
 
+#define BUF_SIZE 64
 #define	DRV_OF_DEV(dev) (dev <= MAX_PRIM ? \
 			 dev / NR_PRIM_PER_DRIVE : \
 			 (dev - MINOR_hd1a) / NR_SUB_PER_DRIVE)
+#define RD_SECT(dev,sect_nr,fsbuf) rw_sector(DEV_READ, \
+				       dev,				\
+				       (sect_nr) * SECTOR_SIZE,		\
+				       SECTOR_SIZE, /* read one sector */ \
+				       proc2pid(p_proc_current),/*TASK_A*/			\
+				       fsbuf);
 
+#define WR_SECT(dev,sect_nr,fsbuf) rw_sector(DEV_WRITE, \
+				       dev,				\
+				       (sect_nr) * SECTOR_SIZE,		\
+				       SECTOR_SIZE, /* write one sector */ \
+				       proc2pid(p_proc_current),				\
+				       fsbuf);
+
+static int rw_sector(int io_type, int dev, u64 pos, int bytes, int proc_nr, void* buf)
+{
+	MESSAGE driver_msg;
+	
+	driver_msg.type		= io_type;
+	driver_msg.DEVICE	= MINOR(dev);
+	driver_msg.POSITION	= pos;
+	driver_msg.CNT		= bytes;	/// hu is: 512
+	driver_msg.PROC_NR	= proc_nr;
+	driver_msg.BUF		= buf;
+
+	hd_rdwt(&driver_msg);
+	return 0;
+}
+
+<<<<<<< HEAD
 u8 buf_cache[256][512];  // 缓冲区定义
+=======
+
+/*****************************************************************************
+ *                                init_buf
+ *****************************************************************************/
+
+u8 buf_cache[BUF_SIZE][SECTOR_SIZE];  // 缓冲区定义
+enum buf_state{CLEAN, UNUSED, DIRTY};   // 缓冲块状态，CLEAN表示缓冲块数据与磁盘数据同步，UNUSED表示数据尚未写入，数据无效；DIRTY表示缓冲块内为脏数据
+>>>>>>> dcr_dev
 
 struct buf_head
 {
 	bool busy;            // 该缓冲块是否被使用
+	enum buf_state state; // 该缓冲块的状态
 	int dev, block;     // 设备号，扇区号(只有busy=true时才有效)
 	void* pos;            // 该缓冲块的起始地址
 	struct buf_head* nxt; // 指向下一个缓冲块头部
@@ -72,11 +112,12 @@ struct buf_head* head;
 void init_buf()
 {
 	head = sys_kmalloc(sizeof(struct buf_head));
-	head = NULL;
-	for (int i = 0; i < 1024; i ++ )
+	for (int i = 0; i < BUF_SIZE; i ++ )
 	{
 		struct buf_head* bh = sys_kmalloc(sizeof(struct buf_head));
 		bh->busy = false;
+		bh->state = UNUSED;
+		bh->dev = 0, bh->block = 0;
 		bh->pos = (void*)buf_cache[i];
 		bh->nxt = head->nxt;
 		head->nxt = bh;
@@ -87,33 +128,59 @@ struct buf_head* get_free_buf(int dev, int block)
 {
 	for (struct buf_head* bh = head; bh != NULL; bh = bh->nxt)
 	{
-		if (bh->busy == false && bh->dev == dev && bh->block == block)
+		if (bh->busy == false)
+		{
+			bh->dev = dev, bh->block = block;
+			bh->busy = true;
 			return bh;
+		}
 	}
 	return NULL;
 }
 
 void grow_buf(int dev, int block)
 {
+	// 如果当前没有空闲的缓冲块，则将其中一个缓冲块写入磁盘
+	// bh表示即将分配给新的数据块的缓冲块，暂时先规定为第一个缓冲块
+	struct buf_head* bh;
+	bh = head->nxt;
+	// 如果该缓冲块的状态为CLEAN或者UNUSED，那么没必要写入磁盘，直接分配即可
+	if (bh->state == CLEAN || bh->state == UNUSED)
+	{
+		bh->dev = dev, bh->block = block;
+		bh->busy = true;
+		bh->state = UNUSED;
+		return;
+	}
+	// 如果该缓冲块的状态为DIRTY，那么需要先将缓冲块中的数据写入磁盘，然后分配给新的数据块
+	int orange_dev = get_fs_dev(PRIMARY_MASTER, ORANGE_TYPE);
+	u8 hdbuf[512];
+	memcpy(hdbuf, bh->pos, SECTOR_SIZE);
+	WR_SECT(orange_dev, block, hdbuf);
+	bh->dev = dev, bh->block = block;
+	bh->state = UNUSED;
+	return;
+}
+
+struct buf_head* get_buf(int dev, int block)
+{
 	for (struct buf_head* bh = head; bh != NULL; bh = bh->nxt)
 	{
-		if (bh->busy == false)
+		if (bh->busy == true && bh->dev == dev && bh->block == block)
 		{
-			bh->dev = dev;
-			bh->block = block;
-			return;
+			return bh;
 		}
 	}
-
-	// 如果当前没有空闲的缓冲块，则将其中一个缓冲块写入磁盘
-	
+	return NULL;
 }
 
 struct buf_head* getblk(int dev, int block)
 {
 	for (;;)
 	{
-		struct buf_head* bh;
+		struct buf_head* bh = get_buf(dev, block);
+		if (bh)
+			return bh;
 		bh = get_free_buf(dev, block);
 		if (bh)
 			return bh;
@@ -121,6 +188,41 @@ struct buf_head* getblk(int dev, int block)
 			grow_buf(dev, block);
 	}
 }
+
+// 将(dev, block)这个数据块的数据读入到addr这个地址，读入数据的大小为size
+void read_buf(void* addr, int dev, int block, int size)
+{
+	struct buf_head* bh;
+	bh = getblk(dev, block);
+	if (bh->state == CLEAN || bh->state == DIRTY)
+	{
+		memcpy(addr, bh->pos, size);
+		return;
+	}
+	else if (bh->state == UNUSED)
+	{
+		// 先将磁盘中的数据读入到缓冲块中
+		int orange_dev = get_fs_dev(PRIMARY_MASTER, ORANGE_TYPE);
+		u8 hdbuf[512];
+		RD_SECT(orange_dev, block, hdbuf);
+		memcpy(bh->pos, hdbuf, SECTOR_SIZE);
+		// 该缓冲块的状态更新为CLEAN
+		bh->state = CLEAN;  
+		// 接下来从缓冲块中读取数据
+		memcpy(addr, bh->pos, size);
+	}
+	return;
+}
+
+void write_buf(void* addr, int dev, int block, int size)
+{
+	struct buf_head* bh;
+	bh = getblk(dev, block);
+	memcpy(bh->pos, addr, size);
+	bh->state = DIRTY;
+	return;
+}
+
 
 /*****************************************************************************
  *                                init_hd
@@ -251,7 +353,33 @@ void hd_service()
 		//the hd queue is not empty when out_hd_queue return 1.
 		while(out_hd_queue(&hdque, &rwinfo))
 		{
-			hd_rdwt_real(rwinfo);
+			// hd_rdwt_real(rwinfo);
+			// rwinfo->proc->task.stat = READY;
+			int drive = DRV_OF_DEV(rwinfo->msg->DEVICE);
+			u64 pos = rwinfo->msg->POSITION;
+			u32 sect_nr = (u32)(pos >> SECTOR_SIZE_SHIFT);	// pos / SECTOR_SIZE
+			int logidx = (rwinfo->msg->DEVICE - MINOR_hd1a) % NR_SUB_PER_DRIVE;
+			sect_nr += rwinfo->msg->DEVICE < MAX_PRIM ?
+				hd_info[drive].primary[rwinfo->msg->DEVICE].base :
+				hd_info[drive].logical[logidx].base;
+
+			int bytes_left = rwinfo->msg->CNT;
+			void *la = rwinfo->kbuf;
+			
+			while (bytes_left) {
+				int bytes = min(SECTOR_SIZE, bytes_left);
+				if (rwinfo->msg->type == DEV_READ) {
+					read_buf(la, rwinfo->msg->DEVICE, sect_nr, bytes);
+				}
+				else {
+					if (!waitfor(STATUS_DRQ, STATUS_DRQ, HD_TIMEOUT))
+						panic("hd writing error.");
+
+					write_buf(la, rwinfo->msg->DEVICE, sect_nr, bytes);
+				}
+				bytes_left -= SECTOR_SIZE;
+				la += SECTOR_SIZE;
+			}
 			rwinfo->proc->task.stat = READY;
 		}
 		yield();
