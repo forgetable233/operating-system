@@ -54,6 +54,23 @@ static int  waitfor(int mask, int val, int timeout);
 //~xw
 
 #define BUF_SIZE 64
+u8 buf_cache[BUF_SIZE][SECTOR_SIZE];  // 缓冲区定义
+/* 缓冲块状态，
+CLEAN表示缓冲块数据与磁盘数据同步，
+UNUSED表示数据尚未写入，数据无效；
+DIRTY表示缓冲块内为脏数据 */ 
+enum buf_state{CLEAN, UNUSED, DIRTY};   
+
+struct buf_head
+{
+	int count;				// 为以后优化预留
+	bool busy;            	// 该缓冲块是否被使用
+	enum buf_state state; 	// 该缓冲块的状态
+	int dev, block;     	// 设备号，扇区号(只有busy=true时才有效)
+	void* pos;            	// 该缓冲块的起始地址, 为cache的地址
+	struct buf_head* nxt; 	// 指向下一个缓冲块头部
+};
+
 #define	DRV_OF_DEV(dev) (dev <= MAX_PRIM ? \
 			 dev / NR_PRIM_PER_DRIVE : \
 			 (dev - MINOR_hd1a) / NR_SUB_PER_DRIVE)
@@ -91,18 +108,6 @@ static int rw_sector(int io_type, int dev, u64 pos, int bytes, int proc_nr, void
  *                                init_buf
  *****************************************************************************/
 
-u8 buf_cache[BUF_SIZE][SECTOR_SIZE];  // 缓冲区定义
-enum buf_state{CLEAN, UNUSED, DIRTY};   // 缓冲块状态，CLEAN表示缓冲块数据与磁盘数据同步，UNUSED表示数据尚未写入，数据无效；DIRTY表示缓冲块内为脏数据
-
-struct buf_head
-{
-	bool busy;            // 该缓冲块是否被使用
-	enum buf_state state; // 该缓冲块的状态
-	int dev, block;     // 设备号，扇区号(只有busy=true时才有效)
-	void* pos;            // 该缓冲块的起始地址
-	struct buf_head* nxt; // 指向下一个缓冲块头部
-};
-
 struct buf_head* head;
 
 void init_buf()
@@ -111,6 +116,7 @@ void init_buf()
 	for (int i = 0; i < BUF_SIZE; i ++ )
 	{
 		struct buf_head* bh = sys_kmalloc(sizeof(struct buf_head));
+		bh->count = 0;
 		bh->busy = false;
 		bh->state = UNUSED;
 		bh->dev = 0, bh->block = 0;
@@ -294,10 +300,13 @@ void hd_close(int device)
  *****************************************************************************/
 void hd_rdwt(MESSAGE * p)
 {
+	kprintf("enter hd rdwt\n");
 	int drive = DRV_OF_DEV(p->DEVICE);
 	
 	u64 pos = p->POSITION;
 
+	struct buf_head* buf_ptr = NULL;
+	
 	//We only allow to R/W from a SECTOR boundary:
 
 	u32 sect_nr = (u32)(pos >> SECTOR_SIZE_SHIFT);	// pos / SECTOR_SIZE
@@ -306,6 +315,10 @@ void hd_rdwt(MESSAGE * p)
 		hd_info[drive].primary[p->DEVICE].base :
 		hd_info[drive].logical[logidx].base;
 
+	int bytes_left = p->CNT;
+	void * la = (void*)va2la(p->PROC_NR, p->BUF);
+
+	// 下面为确定需要进行磁盘访问，进行缓冲区的维护等任务
 	struct hd_cmd cmd;
 	cmd.features	= 0;
 	cmd.count	= (p->CNT + SECTOR_SIZE - 1) / SECTOR_SIZE;
@@ -316,20 +329,40 @@ void hd_rdwt(MESSAGE * p)
 	cmd.command	= (p->type == DEV_READ) ? ATA_READ : ATA_WRITE;
 	hd_cmd_out(&cmd);
 
-	int bytes_left = p->CNT;
-	void * la = (void*)va2la(p->PROC_NR, p->BUF);
+	// 首先尝试在缓冲区中寻找，一次读一个扇区
+	if (!(buf_ptr = getblk(p->DEVICE, sect_nr))) {
+		// 在缓冲区中能够找到对应的buf，则不需要进行磁盘访问, 直接将数据复制到BUF里
+		if (p->type == DEV_READ) {
+			memcpy(buf_ptr->pos, la, SECTOR_SIZE);
+		} else if (p->type == DEV_WRITE) {
+			// 写的时候是否可以考虑释放掉cache？
+			memcpy(la, buf_ptr->pos, SECTOR_SIZE);
+			buf_ptr->state = DIRTY;
+		} else {
+			panic("error occurr \n");
+		}
+		buf_ptr->count = 0;
+		return;
+	}
 
+	// 这个循环的意义还不是很清楚。。。。目前看来，btyes_left一定是SECTOR_SIZE
 	while (bytes_left) {
 		int bytes = min(SECTOR_SIZE, bytes_left);
 		if (p->type == DEV_READ) {
 			interrupt_wait();
 			insw(REG_DATA, hdbuf, SECTOR_SIZE);
 			memcpy(la, hdbuf, bytes);
+			if (!(buf_ptr = getblk(p->DEVICE, sect_nr))) {
+				memcpy(buf_ptr->pos, la, bytes);
+				memset(buf_ptr->pos + bytes, 0, SECTOR_SIZE - bytes);
+			}
+			
 		}
 		else {
 			if (!waitfor(STATUS_DRQ, STATUS_DRQ, HD_TIMEOUT))
 				("hd writing error.");
 
+			// 这里待定，感觉写的时候以及可以释放掉对应的cache了
 			memcpy(hdbuf, la, bytes);
 			outsw(REG_DATA, hdbuf, SECTOR_SIZE);
 			interrupt_wait();
@@ -342,6 +375,8 @@ void hd_rdwt(MESSAGE * p)
 //added by xw, 18/8/26
 void hd_service()
 {
+	// kprintf("enter hd service\n");
+
 	RWInfo *rwinfo;
 	
 	while(1)
