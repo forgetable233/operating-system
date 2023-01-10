@@ -2,7 +2,7 @@
 #include "fs.h"
 #include "vfs.h"
 
-const char* file_path = "dev_tty0/test.txt";
+const char* file_path = "dev_tty0/ptTest.bin";
 
 
 int main(int arg, char *argv[])  {

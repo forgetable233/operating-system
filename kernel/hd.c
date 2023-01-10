@@ -300,7 +300,7 @@ void hd_close(int device)
  *****************************************************************************/
 void hd_rdwt(MESSAGE * p)
 {
-	kprintf("enter hd rdwt\n");
+	// kprintf("enter hd rdwt\n");
 	int drive = DRV_OF_DEV(p->DEVICE);
 	
 	u64 pos = p->POSITION;
