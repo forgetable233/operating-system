@@ -46,6 +46,7 @@ int real_write(int fd, const void *buf, int count); //注意:buf的类型被修�
 int real_unlink(const char *pathname);	//modified by mingxuan 2019-5-17
 int real_lseek(int fd, int offset, int whence);	  //modified by mingxuan 2019-5-17
 
+// 写磁盘接口
 static int rw_sector(int io_type, int dev, u64 pos, int bytes, int proc_nr, void* buf);
 static int rw_sector_sched(int io_type, int dev, int pos, int bytes, int proc_nr, void* buf);
 
@@ -379,6 +380,7 @@ static int rw_sector_sched(int io_type, int dev, int pos, int bytes, int proc_nr
 // static int real_open(const char *pathname, int flags)	//deleted by mingxuan 2019-5-17
 int real_open(const char *pathname, int flags)	//modified by mingxuan 2019-5-17
 {
+	// kprintf("enter the real open function\n");
 	//added by xw, 18/8/27
 	MESSAGE fs_msg;
 
@@ -390,6 +392,7 @@ int real_open(const char *pathname, int flags)	//modified by mingxuan 2019-5-17
 
 	int fd = do_open(&fs_msg);
 
+	// kprintf("\nfinish read\n");
 	return fd;
 }
 
@@ -405,6 +408,7 @@ int real_open(const char *pathname, int flags)	//modified by mingxuan 2019-5-17
 static int do_open(MESSAGE *fs_msg)
 {
 	/*caller_nr is the process number of the */
+	// 判断是否找到目标文件
 	int fd = -1;		/* return value */
 
 	char pathname[MAX_PATH];
@@ -414,6 +418,7 @@ static int do_open(MESSAGE *fs_msg)
 	int name_len = fs_msg->NAME_LEN;	/* length of filename */
 	int src = fs_msg->source;	/* caller proc nr. */
 
+	// 将目标文件的路径复制下来
 	memcpy((void*)va2la(src, pathname), (void*)va2la(src, fs_msg->PATHNAME), name_len);
 	pathname[name_len] = 0;
 
@@ -436,6 +441,7 @@ static int do_open(MESSAGE *fs_msg)
 	
 	assert(i < NR_FILE_DESC);
 
+	// 为寻找的函数，改下面这个,这其实是保存的对应的innode，为之后寻找对应的文件数据
 	int inode_nr = search_file(pathname);
 	struct inode * pin = 0;
 	if (flags & O_CREAT) {
@@ -579,6 +585,7 @@ static int search_file(char * path)
 	char filename[MAX_PATH];
 	memset(filename, 0, MAX_FILENAME_LEN);
 	struct inode * dir_inode;
+	// 找到文件的跟目录，其实是复制路径
 	if (strip_path(filename, path, &dir_inode) != 0)
 		return 0;
 
@@ -599,10 +606,11 @@ static int search_file(char * path)
 	int m = 0;
 	struct dir_entry * pde;
 	char fsbuf[SECTOR_SIZE];	//local array, to substitute global fsbuf. added by xw, 18/12/27
+
 	for (i = 0; i < nr_dir_blks; i++) {
 		//RD_SECT_SCHED(dir_inode->i_dev, dir_blk0_nr + i, fsbuf);	//modified by xw, 18/12/27
+		// 每次读一个扇区，将扇区中的数据与文件名称相比较，判断是否找到了对应的文件，这里开始可以使用buf了
 		RD_SECT(dir_inode->i_dev, dir_blk0_nr + i, fsbuf);	//modified by mingxuan 2019-5-20
-		// read_buf(fsbuf, dir_inode->i_dev, dir_blk0_nr + i, SECTOR_SIZE);
 		pde = (struct dir_entry *)fsbuf;
 		for (j = 0; j < SECTOR_SIZE / DIR_ENTRY_SIZE; j++,pde++) {
 			if (memcmp(filename, pde->name, MAX_FILENAME_LEN) == 0)

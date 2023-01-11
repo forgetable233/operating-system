@@ -109,6 +109,7 @@ STATE OpenFile(const char *filename,int mode);
 STATE CloseFile(int fd);
 STATE OpenDir(const char *dirname);
 
+// 主要需要修改的函数
 STATE ReadFile(int fd,void *buf, int length);
 STATE WriteFile(int fd, const void *buf, int length);
 STATE CopyFileIn(PCHAR sfilename,PCHAR dfilename);

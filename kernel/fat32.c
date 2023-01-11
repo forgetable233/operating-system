@@ -166,7 +166,7 @@ STATE OpenDir(const char* dirname)
 }
 
 
-STATE ReadFile(int fd,void *buf, int length)
+STATE ReadFile(int fd, void *buf, int length)
 {
 	int size = 0;
 	PBYTE sector=NULL;

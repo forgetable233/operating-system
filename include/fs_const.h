@@ -32,7 +32,7 @@
 
 /* Hard Drive */
 #define SECTOR_SIZE		512
-#define SECTOR_BITS		(SECTOR_SIZE * 8)
+#define SECTOR_BITS		(SECTOR_SIZE * 8)	// 4KB
 #define SECTOR_SIZE_SHIFT	9
 
 /* major device numbers (corresponding to kernel/global.c::dd_map[]) */
@@ -96,11 +96,11 @@
 #define	P_EXTENDED	1
 
 #define ORANGES_PART	0x99	/* Orange'S partition */
-#define NO_PART		0x00	/* unused entry */
-#define EXT_PART	0x05	/* extended partition */
+#define NO_PART		0x00		/* unused entry */
+#define EXT_PART	0x05		/* extended partition */
 
-#define	NR_FILE_DESC	128	/* FIXME */	//modified by mingxuan 2019-5-19
-#define	NR_INODE	64	/* FIXME */
+#define	NR_FILE_DESC	128		/* FIXME */	//modified by mingxuan 2019-5-19
+#define	NR_INODE	64			/* FIXME */
 #define	NR_SUPER_BLOCK	8
 
 
