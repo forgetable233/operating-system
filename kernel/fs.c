@@ -601,8 +601,8 @@ static int search_file(char * path)
 	char fsbuf[SECTOR_SIZE];	//local array, to substitute global fsbuf. added by xw, 18/12/27
 	for (i = 0; i < nr_dir_blks; i++) {
 		//RD_SECT_SCHED(dir_inode->i_dev, dir_blk0_nr + i, fsbuf);	//modified by xw, 18/12/27
-		// RD_SECT(dir_inode->i_dev, dir_blk0_nr + i, fsbuf);	//modified by mingxuan 2019-5-20
-		read_buf(fsbuf, dir_inode->i_dev, dir_blk0_nr + i, SECTOR_SIZE);
+		RD_SECT(dir_inode->i_dev, dir_blk0_nr + i, fsbuf);	//modified by mingxuan 2019-5-20
+		// read_buf(fsbuf, dir_inode->i_dev, dir_blk0_nr + i, SECTOR_SIZE);
 		pde = (struct dir_entry *)fsbuf;
 		for (j = 0; j < SECTOR_SIZE / DIR_ENTRY_SIZE; j++,pde++) {
 			if (memcmp(filename, pde->name, MAX_FILENAME_LEN) == 0)
