@@ -31,7 +31,7 @@ static int initialize_cpus();		//added by xw, 18/6/2
 int kernel_main()
 {
 	int error;
-	
+
 	disp_pos = 0;
 	for (int i = 0; i < 25; i++) {
 		for (int j = 0; j < 80; j++) {

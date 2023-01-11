@@ -6,7 +6,6 @@ fi
 IMAGE=$1
 OBJDIR=$2
 OSBOOT_START_OFFSET=$3
-sudo cp testFile/test.txt obj/user 
 
 cp ./hd/test1.img ${IMAGE}
 dd if=${OBJDIR}/boot/mbr.bin of=${IMAGE} bs=1 count=446 conv=notrunc
@@ -21,6 +20,5 @@ sudo mount ${loop_device}p1 iso/
 sudo cp ${OBJDIR}/boot/loader.bin iso/ -v
 sudo cp ${OBJDIR}/kernel/kernel.bin iso/ -v
 sudo umount iso/
-
 
 sudo losetup -d ${loop_device}
