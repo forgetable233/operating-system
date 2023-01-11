@@ -178,11 +178,11 @@ struct buf_head* get_buf(int dev, int block)
 
 struct buf_head* getblk(int dev, int block)
 {
+	struct buf_head* bh = NULL;
 	for (;;)
 	{
-		struct buf_head* bh = get_buf(dev, block);
-		if (bh)
-			return bh;
+		// if (bh)
+		// 	return bh;
 		bh = get_free_buf(dev, block);
 		if (bh)
 			return bh;
@@ -330,7 +330,7 @@ void hd_rdwt(MESSAGE * p)
 	hd_cmd_out(&cmd);
 
 	// 首先尝试在缓冲区中寻找，一次读一个扇区
-	if (!(buf_ptr = getblk(p->DEVICE, sect_nr))) {
+	if (!(buf_ptr = get_buf(p->DEVICE, sect_nr))) {
 		// 在缓冲区中能够找到对应的buf，则不需要进行磁盘访问, 直接将数据复制到BUF里
 		if (p->type == DEV_READ) {
 			memcpy(buf_ptr->pos, la, SECTOR_SIZE);
