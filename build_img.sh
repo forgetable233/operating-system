@@ -6,7 +6,9 @@ fi
 IMAGE=$1
 OBJDIR=$2
 OSBOOT_START_OFFSET=$3
-sudo cp testFile/test.txt obj/user 
+
+# sudo cp testFile/test.txt obj/user
+sudo cp testFile/test.txt obj/user
 
 cp ./hd/test1.img ${IMAGE}
 dd if=${OBJDIR}/boot/mbr.bin of=${IMAGE} bs=1 count=446 conv=notrunc

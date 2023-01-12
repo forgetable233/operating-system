@@ -29,7 +29,6 @@ struct part_ent PARTITION_ENTRY;
 
 //added by xw, 18/8/28
 static HDQueue hdque;
-static volatile int hd_int_waiting_flag;
 static	u8 hd_status;
 static	u8 hdbuf[SECTOR_SIZE * 2];
 //static	struct hd_info hd_info[1];
@@ -162,27 +161,27 @@ void hd_rdwt(MESSAGE * p)
 	hd_cmd_out(&cmd);
 
 	// 首先尝试在缓冲区中寻找，一次读一个扇区
-	if ((buf_ptr = get_buf(p->DEVICE, sect_nr))) {
-		// 在缓冲区中能够找到对应的buf，则不需要进行磁盘访问, 直接将数据复制到BUF里
-		if (p->type == DEV_READ) {
-			memcpy(hdbuf, buf_ptr->pos, SECTOR_SIZE);
-			memcpy(la, hdbuf, SECTOR_SIZE);
-		} else if (p->type == DEV_WRITE) {
-			if (!waitfor(STATUS_DRQ, STATUS_DRQ, HD_TIMEOUT))
-				("hd writing error.");
+	// if ((buf_ptr = get_buf(p->DEVICE, sect_nr))) {
+	// 	// 在缓冲区中能够找到对应的buf，则不需要进行磁盘访问, 直接将数据复制到BUF里
+	// 	if (p->type == DEV_READ) {
+	// 		memcpy(hdbuf, buf_ptr->pos, SECTOR_SIZE);
+	// 		memcpy(la, hdbuf, SECTOR_SIZE);
+	// 	} else if (p->type == DEV_WRITE) {
+	// 		if (!waitfor(STATUS_DRQ, STATUS_DRQ, HD_TIMEOUT))
+	// 			("hd writing error.");
 
-			memcpy(hdbuf, la, SECTOR_SIZE);
-			memcpy(buf_ptr->pos, hdbuf, SECTOR_SIZE);
-			buf_ptr->state = DIRTY;
+	// 		memcpy(hdbuf, la, SECTOR_SIZE);
+	// 		memcpy(buf_ptr->pos, hdbuf, SECTOR_SIZE);
+	// 		buf_ptr->state = DIRTY;
 
-			interrupt_wait();
+	// 		interrupt_wait();
 
-		} else {
-			panic("error occurr \n");
-		}
-		buf_ptr->count = 0;
-		return;
-	}
+	// 	} else {
+	// 		panic("error occurr \n");
+	// 	}
+	// 	buf_ptr->count = 0;
+	// 	return;
+	// }
 
 	// 这个循环的意义还不是很清楚。。。。目前看来，btyes_left一定是SECTOR_SIZE
 	while (bytes_left) {
@@ -191,13 +190,13 @@ void hd_rdwt(MESSAGE * p)
 			interrupt_wait();
 			insw(REG_DATA, hdbuf, SECTOR_SIZE);
 			memcpy(la, hdbuf, bytes);
-			if ((buf_ptr = getblk(p->DEVICE, sect_nr))) {
-				memcpy(buf_ptr->pos, la, bytes);
-				memset(buf_ptr->pos + bytes, 0, SECTOR_SIZE - bytes);
-				// panic("test\n");
-			} else {
-				panic("unable to find a free buffer\n");
-			}
+			// if ((buf_ptr = getblk(p->DEVICE, sect_nr))) {
+			// 	memcpy(buf_ptr->pos, la, bytes);
+			// 	memset(buf_ptr->pos + bytes, 0, SECTOR_SIZE - bytes);
+			// 	// panic("test\n");
+			// } else {
+			// 	panic("unable to find a free buffer\n");
+			// }
 			// kprintf("\nout\n");
 		}
 		else {

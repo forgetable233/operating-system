@@ -10,6 +10,8 @@ USER_SRCS :=	user/ptTest.c		\
 		user/shell_0.c		\
 		user/RWFile.c 		\
 
+TEST_FILE := test.txt
+
 USER_BINS	:= $(patsubst %.c, $(OBJDIR)/%.bin, $(USER_SRCS))
 USER_BASENAMES	:= $(patsubst $(OBJDIR)/user/%, %, $(USER_BINS))
 
@@ -31,4 +33,4 @@ $(OBJDIR)/user/%.bin: $(OBJDIR)/user/%.o $(USERLIB_OBJS) $(LIB_A) $(OBJDIR)/.var
 
 $(OBJDIR)/user/$(USER_TAR): $(USER_BINS)
 	@echo + tar $@
-	@tar -vcf $@ -C $(OBJDIR)/user $(USER_BASENAMES)
+	@tar -vcf $@ -C $(OBJDIR)/user $(USER_BASENAMES) $(TEST_FILE)

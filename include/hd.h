@@ -295,6 +295,8 @@ typedef struct
 	RWInfo *rear;
 } HDQueue;
 
+volatile int hd_int_waiting_flag;
+
 void init_hd();
 void hd_open(int device);
 void hd_close(int device);
@@ -303,6 +305,7 @@ void hd_service();
 void init_buf();
 void read_buf(void* addr, int dev, int block, int size);
 void write_buf(void* addr, int dev, int block, int size);
+void refresh_buf();
 
 void hd_rdwt(MESSAGE *p);
 void hd_rdwt_sched(MESSAGE *p);

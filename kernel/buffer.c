@@ -220,3 +220,72 @@ void write_buf(void* addr, int dev, int block, int size)
 	bh->state = DIRTY;
 	return;
 }
+
+static int waitfor(int mask, int val, int timeout)
+{
+	int t = sys_get_ticks();
+	
+	while(((sys_get_ticks() - t) * 1000 / HZ) < timeout){
+		if ((inb(REG_STATUS) & mask) == val)
+			return 1;
+	}
+	
+	return 0;
+}
+
+static void hd_cmd_out(struct hd_cmd* cmd)
+{
+	/**
+	 * For all commands, the host must first check if BSY=1,
+	 * and should proceed no further unless and until BSY=0
+	 */
+	if (!waitfor(STATUS_BSY, 0, HD_TIMEOUT))
+		panic("hd error.");
+
+	/* Activate the Interrupt Enable (nIEN) bit */
+	outb(REG_DEV_CTRL, 0);
+	/* Load required parameters in the Command Block Registers */
+	outb(REG_FEATURES, cmd->features);
+	outb(REG_NSECTOR,  cmd->count);
+	outb(REG_LBA_LOW,  cmd->lba_low);
+	outb(REG_LBA_MID,  cmd->lba_mid);
+	outb(REG_LBA_HIGH, cmd->lba_high);
+	outb(REG_DEVICE,   cmd->device);
+	/* Write the command code to the Command Register */
+	outb(REG_CMD,     cmd->command);
+}
+
+static void interrupt_wait()
+{
+	while(hd_int_waiting_flag) {
+		
+	}
+	hd_int_waiting_flag = 1;
+}
+
+// 清空缓冲区并写入硬盘
+void refresh_buf() {
+	for (int i = 0; i < BUF_SIZE; i++) {
+		if (bh[i].busy){
+			if (!waitfor(STATUS_DRQ, STATUS_DRQ, HD_TIMEOUT))
+				("hd writing error.");
+			bh[i].busy = false;
+			bh[i].state = UNUSED;
+
+			struct hd_cmd cmd;
+			cmd.features = 0;
+			cmd.count = 1;
+			cmd.lba_low = bh[i].block & 0xFF;
+			cmd.lba_mid = (bh[i].block >> 8) & 0xFF;
+			cmd.lba_high = (bh[i].block >> 16) & 0xFF;
+			cmd.device = MAKE_DEVICE_REG(1, bh[i].dev, (bh[i].block >> 24) & 0xF);
+			cmd.command = ATA_WRITE;
+			hd_cmd_out(&cmd);
+			outsw(REG_DATA, bh[i].pos, SECTOR_SIZE);
+			memset(bh[i].pos, 0, SECTOR_SIZE);
+			push_to_free(bh + i);
+			interrupt_wait();
+		}
+		
+	}
+}

@@ -6,6 +6,7 @@
 #include "global.h"
 #include "proto.h"
 #include "stdio.h"
+// #include "hd.h"
 
 int main(int arg, char *argv[])
 {
@@ -16,6 +17,7 @@ int main(int arg, char *argv[])
 	char buf[1024];
 	int pid;
 	int times = 0;
+	// refresh_buf();
 	while (1)
 	{
 		printf("\nminiOS:/ $ ");
