@@ -59,7 +59,7 @@ u8 buf_cache[BUF_SIZE][SECTOR_SIZE];  // 缓冲区定义
 CLEAN表示缓冲块数据与磁盘数据同步，
 UNUSED表示数据尚未写入，数据无效；
 DIRTY表示缓冲块内为脏数据 */ 
-enum buf_state{CLEAN, UNUSED, DIRTY};   
+enum buf_state{UNUSED, CLEAN, DIRTY};   
 
 struct buf_head
 {
