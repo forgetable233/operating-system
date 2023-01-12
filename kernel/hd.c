@@ -366,14 +366,14 @@ void hd_rdwt(MESSAGE * p)
 			memcpy(hdbuf, buf_ptr->pos, SECTOR_SIZE);
 			memcpy(la, hdbuf, SECTOR_SIZE);
 		} else if (p->type == DEV_WRITE) {
-			// if (!waitfor(STATUS_DRQ, STATUS_DRQ, HD_TIMEOUT))
-			// 	("hd writing error.");
+			if (!waitfor(STATUS_DRQ, STATUS_DRQ, HD_TIMEOUT))
+				("hd writing error.");
 
 			memcpy(hdbuf, la, SECTOR_SIZE);
 			memcpy(buf_ptr->pos, hdbuf, SECTOR_SIZE);
 			buf_ptr->state = DIRTY;
 
-			// interrupt_wait();
+			interrupt_wait();
 
 		} else {
 			panic("error occurr \n");
@@ -392,8 +392,11 @@ void hd_rdwt(MESSAGE * p)
 			if ((buf_ptr = getblk(p->DEVICE, sect_nr))) {
 				memcpy(buf_ptr->pos, la, bytes);
 				memset(buf_ptr->pos + bytes, 0, SECTOR_SIZE - bytes);
+				// panic("test\n");
+			} else {
+				panic("unable to find a free buffer\n");
 			}
-			
+			// kprintf("\nout\n");
 		}
 		else {
 			if (!waitfor(STATUS_DRQ, STATUS_DRQ, HD_TIMEOUT))
@@ -407,6 +410,7 @@ void hd_rdwt(MESSAGE * p)
 		bytes_left -= SECTOR_SIZE;
 		la += SECTOR_SIZE;
 	}
+	// kprintf("\nout\n");
 }
 
 //added by xw, 18/8/26
