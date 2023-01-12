@@ -68,8 +68,11 @@ struct buf_head
 	enum buf_state state; 	// 该缓冲块的状态
 	int dev, block;     	// 设备号，扇区号(只有busy=true时才有效)
 	void* pos;            	// 该缓冲块的起始地址, 为cache的地址
-	struct buf_head* nxt; 	// 指向下一个缓冲块头部
+	// struct buf_head* nxt; 	// 指向下一个缓冲块头部
+	// int nxt;
 };
+
+struct buf_head bh[BUF_SIZE];
 
 #define	DRV_OF_DEV(dev) (dev <= MAX_PRIM ? \
 			 dev / NR_PRIM_PER_DRIVE : \
@@ -108,33 +111,47 @@ static int rw_sector(int io_type, int dev, u64 pos, int bytes, int proc_nr, void
  *                                init_buf
  *****************************************************************************/
 
-struct buf_head* head;
+// struct buf_head* head;
 
 void init_buf()
 {
-	head = sys_kmalloc(sizeof(struct buf_head));
+	// head = (struct buf_head*)sys_kmalloc(sizeof(struct buf_head));
 	for (int i = 0; i < BUF_SIZE; i ++ )
 	{
-		struct buf_head* bh = sys_kmalloc(sizeof(struct buf_head));
-		bh->count = 0;
-		bh->busy = false;
-		bh->state = UNUSED;
-		bh->dev = 0, bh->block = 0;
-		bh->pos = (void*)buf_cache[i];
-		bh->nxt = head->nxt;
-		head->nxt = bh;
+		// struct buf_head* bh = (struct buf_head*)sys_kmalloc(sizeof(struct buf_head));
+		bh[i].count = 0;
+		bh[i].busy = false;
+		bh[i].state = UNUSED;
+		bh[i].dev = 0, bh->block = 0;
+		bh[i].pos = (void*)buf_cache[i];
+		// bh->nxt = head->nxt;
+		// head = bh;
 	}
 }
 
+// struct buf_head* get_free_buf(int dev, int block)
+// {
+// 	for (struct buf_head* bh = head; bh != NULL; bh = bh->nxt)
+// 	{
+// 		if (bh->busy == false)
+// 		{
+// 			bh->dev = dev, bh->block = block;
+// 			bh->busy = true;
+// 			return bh;
+// 		}
+// 	}
+// 	return NULL;
+// }
+
 struct buf_head* get_free_buf(int dev, int block)
 {
-	for (struct buf_head* bh = head; bh != NULL; bh = bh->nxt)
+	for (int i = 0; i < BUF_SIZE; i ++ )
 	{
-		if (bh->busy == false)
+		if (bh[i].busy == false)
 		{
-			bh->dev = dev, bh->block = block;
-			bh->busy = true;
-			return bh;
+			bh[i].dev = dev, bh[i].block = block;
+			bh[i].busy = true;
+			return &bh[i];
 		}
 	}
 	return NULL;
@@ -144,33 +161,46 @@ void grow_buf(int dev, int block)
 {
 	// 如果当前没有空闲的缓冲块，则将其中一个缓冲块写入磁盘
 	// bh表示即将分配给新的数据块的缓冲块，暂时先规定为第一个缓冲块
-	struct buf_head* bh;
-	bh = head->nxt;
+	struct buf_head* bhead;
+	// bh = head->nxt;
+	bhead = &bh[0];
 	// 如果该缓冲块的状态为CLEAN或者UNUSED，那么没必要写入磁盘，直接分配即可
-	if (bh->state == CLEAN || bh->state == UNUSED)
+	if (bhead->state == CLEAN || bhead->state == UNUSED)
 	{
-		bh->dev = dev, bh->block = block;
-		bh->busy = true;
-		bh->state = UNUSED;
+		bhead->dev = dev, bhead->block = block;
+		bhead->busy = true;
+		bhead->state = UNUSED;
 		return;
 	}
 	// 如果该缓冲块的状态为DIRTY，那么需要先将缓冲块中的数据写入磁盘，然后分配给新的数据块
 	int orange_dev = get_fs_dev(PRIMARY_MASTER, ORANGE_TYPE);
 	u8 hdbuf[512];
-	memcpy(hdbuf, bh->pos, SECTOR_SIZE);
+	memcpy(hdbuf, bhead->pos, SECTOR_SIZE);
 	WR_SECT(orange_dev, block, hdbuf);
-	bh->dev = dev, bh->block = block;
-	bh->state = UNUSED;
+	bhead->dev = dev, bhead->block = block;
+	bhead->state = UNUSED;
 	return;
 }
 
+// struct buf_head* get_buf(int dev, int block)
+// {
+// 	for (struct buf_head* bh = head; bh != NULL; bh = bh->nxt)
+// 	{
+// 		if (bh->busy == true && bh->dev == dev && bh->block == block)
+// 		{
+// 			return bh;
+// 		}
+// 	}
+// 	return NULL;
+// }
+
 struct buf_head* get_buf(int dev, int block)
 {
-	for (struct buf_head* bh = head; bh != NULL; bh = bh->nxt)
+	for (int i = 0; i < BUF_SIZE; i ++ )
 	{
-		if (bh->busy == true && bh->dev == dev && bh->block == block)
+		if (bh[i].busy == true && bh[i].dev == dev && bh[i].block == block)
 		{
-			return bh;
+			return &bh[i];
 		}
 	}
 	return NULL;
@@ -204,12 +234,12 @@ void read_buf(void* addr, int dev, int block, int size)
 	else if (bh->state == UNUSED)
 	{
 		// 先将磁盘中的数据读入到缓冲块中
-		int orange_dev = get_fs_dev(PRIMARY_MASTER, ORANGE_TYPE);
+		// int orange_dev = get_fs_dev(PRIMARY_MASTER, ORANGE_TYPE);
 		u8 hdbuf[512];
-		RD_SECT(orange_dev, block, hdbuf);
+		RD_SECT(dev, block, hdbuf);
 		memcpy(bh->pos, hdbuf, SECTOR_SIZE);
 		// 该缓冲块的状态更新为CLEAN
-		bh->state = CLEAN;  
+		bh->state = CLEAN;
 		// 接下来从缓冲块中读取数据
 		memcpy(addr, bh->pos, size);
 	}
