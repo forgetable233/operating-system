@@ -300,13 +300,10 @@ void hd_close(int device)
  *****************************************************************************/
 void hd_rdwt(MESSAGE * p)
 {
-	// kprintf("enter hd rdwt\n");
 	int drive = DRV_OF_DEV(p->DEVICE);
-	
+
 	u64 pos = p->POSITION;
 
-	struct buf_head* buf_ptr = NULL;
-	
 	//We only allow to R/W from a SECTOR boundary:
 
 	u32 sect_nr = (u32)(pos >> SECTOR_SIZE_SHIFT);	// pos / SECTOR_SIZE
@@ -315,10 +312,6 @@ void hd_rdwt(MESSAGE * p)
 		hd_info[drive].primary[p->DEVICE].base :
 		hd_info[drive].logical[logidx].base;
 
-	int bytes_left = p->CNT;
-	void * la = (void*)va2la(p->PROC_NR, p->BUF);
-
-	// 下面为确定需要进行磁盘访问，进行缓冲区的维护等任务
 	struct hd_cmd cmd;
 	cmd.features	= 0;
 	cmd.count	= (p->CNT + SECTOR_SIZE - 1) / SECTOR_SIZE;
@@ -329,40 +322,20 @@ void hd_rdwt(MESSAGE * p)
 	cmd.command	= (p->type == DEV_READ) ? ATA_READ : ATA_WRITE;
 	hd_cmd_out(&cmd);
 
-	// 首先尝试在缓冲区中寻找，一次读一个扇区
-	if (!(buf_ptr = getblk(p->DEVICE, sect_nr))) {
-		// 在缓冲区中能够找到对应的buf，则不需要进行磁盘访问, 直接将数据复制到BUF里
-		if (p->type == DEV_READ) {
-			memcpy(buf_ptr->pos, la, SECTOR_SIZE);
-		} else if (p->type == DEV_WRITE) {
-			// 写的时候是否可以考虑释放掉cache？
-			memcpy(la, buf_ptr->pos, SECTOR_SIZE);
-			buf_ptr->state = DIRTY;
-		} else {
-			panic("error occurr \n");
-		}
-		buf_ptr->count = 0;
-		return;
-	}
+	int bytes_left = p->CNT;
+	void * la = (void*)va2la(p->PROC_NR, p->BUF);
 
-	// 这个循环的意义还不是很清楚。。。。目前看来，btyes_left一定是SECTOR_SIZE
 	while (bytes_left) {
 		int bytes = min(SECTOR_SIZE, bytes_left);
 		if (p->type == DEV_READ) {
 			interrupt_wait();
 			insw(REG_DATA, hdbuf, SECTOR_SIZE);
 			memcpy(la, hdbuf, bytes);
-			if (!(buf_ptr = getblk(p->DEVICE, sect_nr))) {
-				memcpy(buf_ptr->pos, la, bytes);
-				memset(buf_ptr->pos + bytes, 0, SECTOR_SIZE - bytes);
-			}
-			
 		}
 		else {
 			if (!waitfor(STATUS_DRQ, STATUS_DRQ, HD_TIMEOUT))
 				("hd writing error.");
 
-			// 这里待定，感觉写的时候以及可以释放掉对应的cache了
 			memcpy(hdbuf, la, bytes);
 			outsw(REG_DATA, hdbuf, SECTOR_SIZE);
 			interrupt_wait();
