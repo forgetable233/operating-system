@@ -77,14 +77,14 @@ struct buf_head bh[BUF_SIZE];
 #define	DRV_OF_DEV(dev) (dev <= MAX_PRIM ? \
 			 dev / NR_PRIM_PER_DRIVE : \
 			 (dev - MINOR_hd1a) / NR_SUB_PER_DRIVE)
-#define RD_SECT(dev,sect_nr,fsbuf) rw_sector(DEV_READ, \
+#define RD_SECT_BUF(dev,sect_nr,fsbuf) rw_sector(DEV_READ, \
 				       dev,				\
 				       (sect_nr) * SECTOR_SIZE,		\
 				       SECTOR_SIZE, /* read one sector */ \
 				       proc2pid(p_proc_current),/*TASK_A*/			\
 				       fsbuf);
 
-#define WR_SECT(dev,sect_nr,fsbuf) rw_sector(DEV_WRITE, \
+#define WR_SECT_BUF(dev,sect_nr,fsbuf) rw_sector(DEV_WRITE, \
 				       dev,				\
 				       (sect_nr) * SECTOR_SIZE,		\
 				       SECTOR_SIZE, /* write one sector */ \
@@ -176,7 +176,7 @@ void grow_buf(int dev, int block)
 	int orange_dev = get_fs_dev(PRIMARY_MASTER, ORANGE_TYPE);
 	u8 hdbuf[512];
 	memcpy(hdbuf, bhead->pos, SECTOR_SIZE);
-	WR_SECT(orange_dev, block, hdbuf);
+	WR_SECT_BUF(orange_dev, block, hdbuf);
 	bhead->dev = dev, bhead->block = block;
 	bhead->state = UNUSED;
 	return;
@@ -236,7 +236,7 @@ void read_buf(void* addr, int dev, int block, int size)
 		// 先将磁盘中的数据读入到缓冲块中
 		// int orange_dev = get_fs_dev(PRIMARY_MASTER, ORANGE_TYPE);
 		u8 hdbuf[512];
-		RD_SECT(dev, block, hdbuf);
+		RD_SECT_BUF(dev, block, hdbuf);
 		memcpy(bh->pos, hdbuf, SECTOR_SIZE);
 		// 该缓冲块的状态更新为CLEAN
 		bh->state = CLEAN;
