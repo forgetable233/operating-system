@@ -140,7 +140,6 @@ struct file_desc {
  * params are the same), we use this macro to make code more readable.
  */
 
-
 #define RD_SECT(dev, sect_nr, fsbuf) read_buf(fsbuf, dev, sect_nr, SECTOR_SIZE);
 #define WR_SECT(dev, sect_nr, fsbuf) write_buf(fsbuf, dev, sect_nr, SECTOR_SIZE);
 
