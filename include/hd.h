@@ -299,6 +299,8 @@ void init_hd();
 void hd_open(int device);
 void hd_close(int device);
 void hd_service();
+
+void init_buf();
 void read_buf(void* addr, int dev, int block, int size);
 void write_buf(void* addr, int dev, int block, int size);
 

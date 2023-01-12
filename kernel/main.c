@@ -77,6 +77,7 @@ int kernel_main()
 	
 	/* initialize hd-irq and hd rdwt queue */
 	init_hd();
+	init_buf();
 	
 	/* enable interrupt, we should read information of some devices by interrupt.
 	 * Note that you must have initialized all devices ready before you enable
