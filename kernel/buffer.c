@@ -22,26 +22,6 @@
 #include "stdio.h"
 #include "assert.h"
 
-#define BUF_SIZE 64
-u8 buf_cache[BUF_SIZE][SECTOR_SIZE];  // 缓冲区定义
-/* 缓冲块状态，
-CLEAN表示缓冲块数据与磁盘数据同步，
-UNUSED表示数据尚未写入，数据无效；
-DIRTY表示缓冲块内为脏数据 */ 
-enum buf_state{UNUSED, CLEAN, DIRTY}; 
-
-struct buf_head
-{
-	int count;				// 为以后优化预留
-	bool busy;            	// 该缓冲块是否被使用
-	enum buf_state state; 	// 该缓冲块的状态
-	int dev, block;     	// 设备号，扇区号(只有busy=true时才有效)
-	void* pos;            	// 该缓冲块的起始地址, 为cache的地址
-	// struct buf_head* nxt; 	// 指向下一个缓冲块头部
-	// int nxt;
-};
-
-struct buf_head bh[BUF_SIZE];
 
 #define	DRV_OF_DEV(dev) (dev <= MAX_PRIM ? \
 			 dev / NR_PRIM_PER_DRIVE : \
@@ -59,6 +39,55 @@ struct buf_head bh[BUF_SIZE];
 				       SECTOR_SIZE, /* write one sector */ \
 				       proc2pid(p_proc_current),				\
 				       fsbuf);
+
+
+#define BUF_SIZE 64
+static u8 buf_cache[BUF_SIZE][SECTOR_SIZE];  // 缓冲区定义
+/* 缓冲块状态，
+CLEAN表示缓冲块数据与磁盘数据同步，
+UNUSED表示数据尚未写入，数据无效；
+DIRTY表示缓冲块内为脏数据 */ 
+enum buf_state{UNUSED, CLEAN, DIRTY}; 
+
+struct buf_head
+{
+	int count;				// 为以后优化预留
+	bool busy;            	// 该缓冲块是否被使用
+	enum buf_state state; 	// 该缓冲块的状态
+	int dev, block;     	// 设备号，扇区号(只有busy=true时才有效)
+	void* pos;            	// 该缓冲块的起始地址, 为cache的地址
+	// struct buf_head* nxt; 	// 指向下一个缓冲块头部
+	// int nxt;
+};
+
+static struct buf_head bh[BUF_SIZE];
+typedef struct buf_head_que
+{
+	struct buf_head* bh_list[BUF_SIZE + 1];
+	int front, rear;
+}buf_head_que;
+static buf_head_que free_que;
+
+static void push_to_free(struct buf_head* bhead)
+{
+	if ((free_que.rear + 1) % (BUF_SIZE + 1) == free_que.front)
+	{
+		panic("The free buffer cache queue is full!");
+	}
+	free_que.bh_list[free_que.rear] = bhead;
+	free_que.rear = (free_que.rear + 1) % (BUF_SIZE + 1);
+}
+
+static struct buf_head* pop_from_free()
+{
+	if (free_que.front == free_que.rear)
+	{
+		panic("The free buffer cache queue is empty!");
+	}
+	struct buf_head* ret = free_que.bh_list[free_que.front];
+	free_que.front = (free_que.front + 1) % (BUF_SIZE + 1);
+	return ret;
+}
 
 static int rw_sector(int io_type, int dev, u64 pos, int bytes, int proc_nr, void* buf)
 {
@@ -80,53 +109,33 @@ static int rw_sector(int io_type, int dev, u64 pos, int bytes, int proc_nr, void
  *                                init_buf
  *****************************************************************************/
 
-// struct buf_head* head;
-
 void init_buf()
 {
-	// head = (struct buf_head*)sys_kmalloc(sizeof(struct buf_head));
+	free_que.front = free_que.rear = 0;
 	for (int i = 0; i < BUF_SIZE; i ++ )
 	{
-		// struct buf_head* bh = (struct buf_head*)sys_kmalloc(sizeof(struct buf_head));
 		bh[i].count = 0;
 		bh[i].busy = false;
 		bh[i].state = UNUSED;
 		bh[i].dev = 0, bh->block = 0;
 		bh[i].pos = (void*)buf_cache[i];
-		// bh->nxt = head->nxt;
-		// head = bh;
+		push_to_free(&bh[i]);
 	}
 }
 
-// struct buf_head* get_free_buf(int dev, int block)
-// {
-// 	for (struct buf_head* bh = head; bh != NULL; bh = bh->nxt)
-// 	{
-// 		if (bh->busy == false)
-// 		{
-// 			bh->dev = dev, bh->block = block;
-// 			bh->busy = true;
-// 			return bh;
-// 		}
-// 	}
-// 	return NULL;
-// }
-
-struct buf_head* get_free_buf(int dev, int block)
+static struct buf_head* get_free_buf(int dev, int block)
 {
-	for (int i = 0; i < BUF_SIZE; i ++ )
-	{
-		if (bh[i].busy == false)
-		{
-			bh[i].dev = dev, bh[i].block = block;
-			bh[i].busy = true;
-			return &bh[i];
-		}
-	}
-	return NULL;
+	if (free_que.front == free_que.rear)
+		return NULL;
+
+	struct buf_head *bhead = pop_from_free();
+	bhead->dev = dev, bhead->block = block;
+	bhead->busy = true;
+
+	return bhead;
 }
 
-void grow_buf(int dev, int block)
+static void grow_buf(int dev, int block)
 {
 	// 如果当前没有空闲的缓冲块，则将其中一个缓冲块写入磁盘
 	// bh表示即将分配给新的数据块的缓冲块，暂时先规定为第一个缓冲块
@@ -151,19 +160,7 @@ void grow_buf(int dev, int block)
 	return;
 }
 
-// struct buf_head* get_buf(int dev, int block)
-// {
-// 	for (struct buf_head* bh = head; bh != NULL; bh = bh->nxt)
-// 	{
-// 		if (bh->busy == true && bh->dev == dev && bh->block == block)
-// 		{
-// 			return bh;
-// 		}
-// 	}
-// 	return NULL;
-// }
-
-struct buf_head* get_buf(int dev, int block)
+static struct buf_head* get_buf(int dev, int block)
 {
 	for (int i = 0; i < BUF_SIZE; i ++ )
 	{
@@ -175,7 +172,7 @@ struct buf_head* get_buf(int dev, int block)
 	return NULL;
 }
 
-struct buf_head* getblk(int dev, int block)
+static struct buf_head* getblk(int dev, int block)
 {
 	for (;;)
 	{
