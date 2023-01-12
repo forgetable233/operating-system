@@ -700,14 +700,15 @@ void read_super_block(int dev)	//modified by mingxuan 2020-10-30
 	MESSAGE driver_msg;
 	char fsbuf[SECTOR_SIZE];	//local array, to substitute global fsbuf. added by xw, 18/12/27
 
-	driver_msg.type		= DEV_READ;
-	driver_msg.DEVICE	= MINOR(dev);
-	driver_msg.POSITION	= SECTOR_SIZE * 1;
-	driver_msg.BUF		= fsbuf;
-	driver_msg.CNT		= SECTOR_SIZE;
-	driver_msg.PROC_NR	= proc2pid(p_proc_current);///TASK_A
+	// driver_msg.type		= DEV_READ;
+	// driver_msg.DEVICE	= MINOR(dev);
+	// driver_msg.POSITION	= SECTOR_SIZE * 1;
+	// driver_msg.BUF		= fsbuf;
+	// driver_msg.CNT		= SECTOR_SIZE;
+	// driver_msg.PROC_NR	= proc2pid(p_proc_current);///TASK_A
 
-	hd_rdwt(&driver_msg);
+	// hd_rdwt(&driver_msg);
+	RD_SECT(dev, 1, fsbuf);
 
 	for (i = 0; i < NR_SUPER_BLOCK; i++)
 		if (super_block[i].fs_type == ORANGE_TYPE)
