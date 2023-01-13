@@ -26,19 +26,6 @@
 #define	DRV_OF_DEV(dev) (dev <= MAX_PRIM ? \
 			 dev / NR_PRIM_PER_DRIVE : \
 			 (dev - MINOR_hd1a) / NR_SUB_PER_DRIVE)
-#define RD_SECT_BUF(dev,sect_nr,fsbuf) rw_sector(DEV_READ, \
-				       dev,				\
-				       (sect_nr) * SECTOR_SIZE,		\
-				       SECTOR_SIZE, /* read one sector */ \
-				       proc2pid(p_proc_current),/*TASK_A*/			\
-				       fsbuf);
-
-#define WR_SECT_BUF(dev,sect_nr,fsbuf) rw_sector(DEV_WRITE, \
-				       dev,				\
-				       (sect_nr) * SECTOR_SIZE,		\
-				       SECTOR_SIZE, /* write one sector */ \
-				       proc2pid(p_proc_current),				\
-				       fsbuf);
 
 
 // #define BUF_SIZE 64
@@ -103,6 +90,8 @@ static int rw_sector(int io_type, int dev, u64 pos, int bytes, int proc_nr, void
 	hd_rdwt(&driver_msg);
 	return 0;
 }
+
+void free_buf(struct buf_head* bh);
 
 
 /*****************************************************************************
@@ -171,7 +160,7 @@ static struct buf_head* get_buf(int dev, int block)
 	return NULL;
 }
 
-static struct buf_head* getblk(int dev, int block)
+struct buf_head* getblk(int dev, int block)
 {
 	for (;;)
 	{
@@ -195,9 +184,9 @@ void read_buf(void* addr, int dev, int block, int size)
 	{
 		// kprintf("enter buffer\n")		;
 		memcpy(addr, bh->pos, size);
+		// free_buf(bh);
 		return;
-	} else if (bh->state == UNUSED)
-	{
+	} else if (bh->state == UNUSED) {
 		// kprintf("========================================================\n");
 		// 先将磁盘中的数据读入到缓冲块中
 		// int orange_dev = get_fs_dev(PRIMARY_MASTER, ORANGE_TYPE);
@@ -222,17 +211,39 @@ void write_buf(void* addr, int dev, int block, int size)
 	return;
 }
 
+void free_buf(struct buf_head* bh) {
+	assert(bh->busy == true && bh->state != UNUSED);
+
+	bh->busy = false;
+	bh->state = UNUSED;
+	push_to_free(bh);
+	WR_SECT_BUF(bh->dev, bh->block, bh->pos);
+}
+
+void Free_buf(int dev, int block) {
+	struct buf_head* bh = getblk(dev, block);
+	if (bh->state == UNUSED) {
+		push_to_free(bh);
+		return;
+	} else {
+		free_buf(bh);
+		return;
+	}
+}
+
 // 清空缓冲区并写入硬盘
 void refresh_buf() {
 	kprintf("enter refresh buf\n");
 	for (int i = 0; i < BUF_SIZE; i++) {
-		if (bh[i].busy){
-			bh[i].busy = false;
-			bh[i].state = UNUSED;
+		struct buf_head* temp = bh + i;
+		free_buf(temp);
+		// if (bh[i].busy){
+		// 	bh[i].busy = false;
+		// 	bh[i].state = UNUSED;
 
-			push_to_free(bh + i);
-			WR_SECT(bh[i].dev, bh[i].block, bh[i].pos);
-			kprintf("\nwrite hd\n");
-		}
+		// 	push_to_free(bh + i);
+		// 	WR_SECT_BUF(bh[i].dev, bh[i].block, bh[i].pos);
+		// 	kprintf("\nwrite hd\n");
+		// }
 	}
 }

@@ -8,6 +8,7 @@
 #include "stdio.h"
 #include "hd.h"
 
+
 int main(int arg, char *argv[])
 {
 	int stdin = open("dev_tty0", O_RDWR);
@@ -20,6 +21,7 @@ int main(int arg, char *argv[])
 	// refresh_buf();
 	while (1)
 	{
+		struct buf_head* test;
 		printf("\nminiOS:/ $ ");
 		if (gets(buf) && strlen(buf) != 0)
 		{

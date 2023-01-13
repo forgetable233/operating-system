@@ -185,7 +185,7 @@ static void mkfs()
 	kprintf("test\n");
 
 	/* write the super block */
-	WR_SECT(orange_dev, 1, fsbuf);	// modified by mingxuan 2020-10-27
+	WR_SECT_BUF(orange_dev, 1, fsbuf);	// modified by mingxuan 2020-10-27
 	// panic("break\n");
 	kprintf("devbase:0x%x00", (geo.base + 0) * 2);
 	kprintf(" sb:0x%x00", (geo.base + 1) * 2);
@@ -202,7 +202,7 @@ static void mkfs()
 		fsbuf[0] |= 1 << i;
 
 	kprintf("\nbegin write two\n");
-	WR_SECT(orange_dev, 2, fsbuf);	//modified by mingxuan 2020-10-27
+	WR_SECT_BUF(orange_dev, 2, fsbuf);	//modified by mingxuan 2020-10-27
 
 	/************************/
 	/*      secter map      */
@@ -215,12 +215,12 @@ static void mkfs()
 	for (j = 0; j < nr_sects % 8; j++)
 		fsbuf[i] |= (1 << j);
 
-	WR_SECT(orange_dev, 2 + sb.nr_imap_sects, fsbuf);	//modified by mingxuan 2020-10-27
+	WR_SECT_BUF(orange_dev, 2 + sb.nr_imap_sects, fsbuf);	//modified by mingxuan 2020-10-27
 
 	/* zeromemory the rest sector-map */
 	memset(fsbuf, 0, SECTOR_SIZE);
 	for (i = 1; i < sb.nr_smap_sects; i++)
-		WR_SECT(orange_dev, 2 + sb.nr_imap_sects + i, fsbuf);	//modified by mingxuan 2020-10-27
+		WR_SECT_BUF(orange_dev, 2 + sb.nr_imap_sects + i, fsbuf);	//modified by mingxuan 2020-10-27
 
 	/* app.tar */
 	//added by mingxuan 2019-5-19
@@ -229,7 +229,7 @@ static void mkfs()
 	int bit_off_in_sect = bit_offset % (SECTOR_SIZE * 8);
 	int bit_left = INSTALL_NR_SECTORS;
 	int cur_sect = bit_offset / (SECTOR_SIZE * 8);
-	RD_SECT(orange_dev, 2 + sb.nr_imap_sects + cur_sect, fsbuf);//modified by mingxuan 2020-10-27
+	RD_SECT_BUF(orange_dev, 2 + sb.nr_imap_sects + cur_sect, fsbuf);//modified by mingxuan 2020-10-27
 	while (bit_left) {
 		int byte_off = bit_off_in_sect / 8;
 		/* this line is ineffecient in a loop, but I don't care */
@@ -237,13 +237,13 @@ static void mkfs()
 		bit_left--;
 		bit_off_in_sect++;
 		if (bit_off_in_sect == (SECTOR_SIZE * 8)) {
-			WR_SECT(orange_dev, 2 + sb.nr_imap_sects + cur_sect, fsbuf);	//modified by mingxuan 2020-10-27
+			WR_SECT_BUF(orange_dev, 2 + sb.nr_imap_sects + cur_sect, fsbuf);	//modified by mingxuan 2020-10-27
 			cur_sect++;
-			RD_SECT(orange_dev, 2 + sb.nr_imap_sects + cur_sect, fsbuf);	//modified by mingxuan 2020-10-27
+			RD_SECT_BUF(orange_dev, 2 + sb.nr_imap_sects + cur_sect, fsbuf);	//modified by mingxuan 2020-10-27
 			bit_off_in_sect = 0;
 		}
 	}
-	WR_SECT(orange_dev, 2 + sb.nr_imap_sects + cur_sect, fsbuf);	//modified by mingxuan 2020-10-27
+	WR_SECT_BUF(orange_dev, 2 + sb.nr_imap_sects + cur_sect, fsbuf);	//modified by mingxuan 2020-10-27
 
 	/************************/
 	/*       inodes         */
@@ -279,7 +279,7 @@ static void mkfs()
 	pi->i_start_sect = INSTALL_START_SECTOR;
 	pi->i_nr_sects = INSTALL_NR_SECTORS;
 
-	WR_SECT(orange_dev, 2 + sb.nr_imap_sects + sb.nr_smap_sects, fsbuf);	//modified by mingxuan 2020-10-27
+	WR_SECT_BUF(orange_dev, 2 + sb.nr_imap_sects + sb.nr_smap_sects, fsbuf);	//modified by mingxuan 2020-10-27
 
 	/************************/
 	/*          `/'         */
@@ -311,7 +311,7 @@ static void mkfs()
 	strcpy(pde->name, INSTALL_FILENAME); //added by mingxuan 2019-5-19
 
 	//WR_SECT(ROOT_DEV, sb.n_1st_sect, fsbuf);	//modified by xw, 18/12/27	//deleted by mingxuan 2020-10-27
-	WR_SECT(orange_dev, sb.n_1st_sect, fsbuf);	//modified by mingxuan 2020-10-27
+	WR_SECT_BUF(orange_dev, sb.n_1st_sect, fsbuf);	//modified by mingxuan 2020-10-27
 }
 
 /*****************************************************************************
@@ -1127,6 +1127,14 @@ static int do_close(int fd)
 	p_proc_current->task.filp[fd]->flag = 0; //added by mingxuan 2019-5-17
 	p_proc_current->task.filp[fd] = 0;
 
+	int dev = p_proc_current->task.filp[fd]->fd_node.fd_inode->i_dev;
+	int begin_sec = p_proc_current->task.filp[fd]->fd_node.fd_inode->i_start_sect;
+	int sec_num = p_proc_current->task.filp[fd]->fd_node.fd_inode->i_nr_sects;
+	for (int i = 0; i < sec_num; i++) {
+		int tar_sec = begin_sec + i;
+		Free_buf(dev, tar_sec);
+	}
+	// struct buf_head* bh = getblk();
 	return 0;
 }
 

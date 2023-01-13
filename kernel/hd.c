@@ -226,33 +226,34 @@ void hd_service()
 		//the hd queue is not empty when out_hd_queue return 1.
 		while(out_hd_queue(&hdque, &rwinfo))
 		{
-			// hd_rdwt_real(rwinfo);
+			hd_rdwt_real(rwinfo);
 			// rwinfo->proc->task.stat = READY;
-			int drive = DRV_OF_DEV(rwinfo->msg->DEVICE);
-			u64 pos = rwinfo->msg->POSITION;
-			u32 sect_nr = (u32)(pos >> SECTOR_SIZE_SHIFT);	// pos / SECTOR_SIZE
-			int logidx = (rwinfo->msg->DEVICE - MINOR_hd1a) % NR_SUB_PER_DRIVE;
-			sect_nr += rwinfo->msg->DEVICE < MAX_PRIM ?
-				hd_info[drive].primary[rwinfo->msg->DEVICE].base :
-				hd_info[drive].logical[logidx].base;
+			// int drive = DRV_OF_DEV(rwinfo->msg->DEVICE);
+			// u64 pos = rwinfo->msg->POSITION;
+			// u32 sect_nr = (u32)(pos >> SECTOR_SIZE_SHIFT);	// pos / SECTOR_SIZE
+			// int logidx = (rwinfo->msg->DEVICE - MINOR_hd1a) % NR_SUB_PER_DRIVE;
+			// sect_nr += rwinfo->msg->DEVICE < MAX_PRIM ?
+			// 	hd_info[drive].primary[rwinfo->msg->DEVICE].base :
+			// 	hd_info[drive].logical[logidx].base;
 
-			int bytes_left = rwinfo->msg->CNT;
-			void *la = rwinfo->kbuf;
+			// int bytes_left = rwinfo->msg->CNT;
+			// void *la = rwinfo->kbuf;
 			
-			while (bytes_left) {
-				int bytes = min(SECTOR_SIZE, bytes_left);
-				if (rwinfo->msg->type == DEV_READ) {
-					read_buf(la, rwinfo->msg->DEVICE, sect_nr, bytes);
-				}
-				else {
-					if (!waitfor(STATUS_DRQ, STATUS_DRQ, HD_TIMEOUT))
-						panic("hd writing error.");
+			// while (bytes_left) {
+			// 	int bytes = min(SECTOR_SIZE, bytes_left);
+			// 	if (rwinfo->msg->type == DEV_READ) {
+			// 		read_buf(la, rwinfo->msg->DEVICE, sect_nr, bytes);
+			// 	}
+			// 	else {
+			// 		if (!waitfor(STATUS_DRQ, STATUS_DRQ, HD_TIMEOUT))
+			// 			panic("hd writing error.");
 
-					write_buf(la, rwinfo->msg->DEVICE, sect_nr, bytes);
-				}
-				bytes_left -= SECTOR_SIZE;
-				la += SECTOR_SIZE;
-			}
+			// 		// WR_SECT_BUF(rwinfo->msg->DEVICE, sect_nr, la);
+			// 		write_buf(la, rwinfo->msg->DEVICE, sect_nr, bytes);
+			// 	}
+			// 	bytes_left -= SECTOR_SIZE;
+			// 	la += SECTOR_SIZE;
+			// }
 			rwinfo->proc->task.stat = READY;
 		}
 		yield();
