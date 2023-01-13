@@ -1,82 +1,89 @@
+#include "types.h"
+#include "param.h"
+#include "memlayout.h"
+#include "riscv.h"
+#include "defs.h"
 
-/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-                            start.c
-++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-                                                    Forrest Yu, 2005
-++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+void main();
+void timerinit();
 
-#include "stdio.h"
-#include "protect.h"
-#include "proc.h"
-#include "global.h"
-#include "proto.h"
+// entry.S needs one stack per CPU.
+__attribute__ ((aligned (16))) char stack0[4096 * NCPU];
 
-#include "assert.h"
-#include "string.h"
+// a scratch area per CPU for machine-mode timer interrupts.
+uint64 timer_scratch[NCPU][5];
 
-/*
- * 当发生不可挽回的错误时就打印错误信息并使CPU核休眠
- */
+// assembly code in kernelvec.S for machine-mode timer interrupt.
+extern void timervec();
+
+// entry.S jumps here in machine mode on stack0.
 void
-_panic(const char *file, int line, const char *fmt,...)
+start()
 {
-	va_list ap;
+  // set M Previous Privilege mode to Supervisor, for mret.
+  unsigned long x = r_mstatus();
+  x &= ~MSTATUS_MPP_MASK;
+  x |= MSTATUS_MPP_S;
+  w_mstatus(x);
 
-	// 确保CPU核不受外界中断的影响
-	asm volatile("cli");
-	asm volatile("cld");
+  // set M Exception Program Counter to main, for mret.
+  // requires gcc -mcmodel=medany
+  w_mepc((uint64)main);
 
-	va_start(ap, fmt);
-	kprintf("kernel panic at %s:%d: ", file, line);
-	vkprintf(fmt, ap);
-	kprintf("\n");
-	va_end(ap);
-	// 休眠CPU核，直接罢工
-	while(1)
-		asm volatile("hlt");
+  // disable paging for now.
+  w_satp(0);
+
+  // delegate all interrupts and exceptions to supervisor mode.
+  w_medeleg(0xffff);
+  w_mideleg(0xffff);
+  w_sie(r_sie() | SIE_SEIE | SIE_STIE | SIE_SSIE);
+
+  // configure Physical Memory Protection to give supervisor mode
+  // access to all of physical memory.
+  w_pmpaddr0(0x3fffffffffffffull);
+  w_pmpcfg0(0xf);
+
+  // ask for clock interrupts.
+  timerinit();
+
+  // keep each CPU's hartid in its tp register, for cpuid().
+  int id = r_mhartid();
+  w_tp(id);
+
+  // switch to supervisor mode and jump to main().
+  asm volatile("mret");
 }
 
-/*
- * 很像panic，但是不会休眠CPU核，就是正常打印信息
- */
+// arrange to receive timer interrupts.
+// they will arrive in machine mode at
+// at timervec in kernelvec.S,
+// which turns them into software interrupts for
+// devintr() in trap.c.
 void
-_warn(const char *file, int line, const char *fmt,...)
+timerinit()
 {
-	va_list ap;
+  // each CPU has a separate source of timer interrupts.
+  int id = r_mhartid();
 
-	va_start(ap, fmt);
-	kprintf("kernel warning at %s:%d: ", file, line);
-	vkprintf(fmt, ap);
-	kprintf("\n");
-	va_end(ap);
-}
+  // ask the CLINT for a timer interrupt.
+  int interval = 1000000; // cycles; about 1/10th second in qemu.
+  *(uint64*)CLINT_MTIMECMP(id) = *(uint64*)CLINT_MTIME + interval;
 
+  // prepare information in scratch[] for timervec.
+  // scratch[0..2] : space for timervec to save registers.
+  // scratch[3] : address of CLINT MTIMECMP register.
+  // scratch[4] : desired interval (in cycles) between timer interrupts.
+  uint64 *scratch = &timer_scratch[id][0];
+  scratch[3] = CLINT_MTIMECMP(id);
+  scratch[4] = interval;
+  w_mscratch((uint64)scratch);
 
-/*======================================================================*
-                            cstart
- *======================================================================*/
-void cstart()
-{
-	kprintf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n-----\"cstart\" begins-----\n");
+  // set the machine-mode trap handler.
+  w_mtvec((uint64)timervec);
 
-	// 将 LOADER 中的 GDT 复制到新的 GDT 中
-	memcpy(	&gdt,				    // New GDT
-		(void*)(*((u32*)(&gdt_ptr[2]))),   // Base  of Old GDT
-		*((u16*)(&gdt_ptr[0])) + 1	    // Limit of Old GDT
-		);
-	// gdt_ptr[6] 共 6 个字节：0~15:Limit  16~47:Base。用作 sgdt 以及 lgdt 的参数。
-	u16* p_gdt_limit = (u16*)(&gdt_ptr[0]);
-	u32* p_gdt_base  = (u32*)(&gdt_ptr[2]);
-	*p_gdt_limit = GDT_SIZE * sizeof(DESCRIPTOR) - 1;
-	*p_gdt_base  = (u32)&gdt;
+  // enable machine-mode interrupts.
+  w_mstatus(r_mstatus() | MSTATUS_MIE);
 
-	// idt_ptr[6] 共 6 个字节：0~15:Limit  16~47:Base。用作 sidt 以及 lidt 的参数。
-	u16* p_idt_limit = (u16*)(&idt_ptr[0]);
-	u32* p_idt_base  = (u32*)(&idt_ptr[2]);
-	*p_idt_limit = IDT_SIZE * sizeof(GATE) - 1;
-	*p_idt_base  = (u32)&idt;
-
-	init_prot();
-
-	kprintf("-----\"cstart\" finished-----\n");
+  // enable machine-mode timer interrupts.
+  w_mie(r_mie() | MIE_MTIE);
 }

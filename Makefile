@@ -1,182 +1,173 @@
-#
-# make的主文件
-#
+K=kernel
+U=user
 
-# 文件夹
-# OBJ用于存放编译出来的可重定位文件
-OBJDIR := obj
-# INC用于存放各种头文件(*.h)
-INCDIR := include
+OBJS = \
+  $K/entry.o \
+  $K/start.o \
+  $K/console.o \
+  $K/printf.o \
+  $K/uart.o \
+  $K/kalloc.o \
+  $K/spinlock.o \
+  $K/string.o \
+  $K/main.o \
+  $K/vm.o \
+  $K/proc.o \
+  $K/swtch.o \
+  $K/trampoline.o \
+  $K/trap.o \
+  $K/syscall.o \
+  $K/sysproc.o \
+  $K/bio.o \
+  $K/fs.o \
+  $K/log.o \
+  $K/sleeplock.o \
+  $K/file.o \
+  $K/pipe.o \
+  $K/exec.o \
+  $K/sysfile.o \
+  $K/kernelvec.o \
+  $K/plic.o \
+  $K/virtio_disk.o
 
-# 编译以及日常工具
-CC	:= gcc
-# 汇编器
-AS	:= nasm
-# 静态库编辑器
-AR	:= ar
-# 链接器
-LD	:= ld
-# 复制文件
-OBJCOPY	:= objcopy
-# 反编译
-OBJDUMP	:= objdump
-# 查询可重定位文件符号表
-NM	:= nm
+# riscv64-unknown-elf- or riscv64-linux-gnu-
+# perhaps in /opt/riscv/bin
+#TOOLPREFIX = 
 
-DEFS	:= 
+# Try to infer the correct TOOLPREFIX if not set
+ifndef TOOLPREFIX
+TOOLPREFIX := $(shell if riscv64-unknown-elf-objdump -i 2>&1 | grep 'elf64-big' >/dev/null 2>&1; \
+	then echo 'riscv64-unknown-elf-'; \
+	elif riscv64-linux-gnu-objdump -i 2>&1 | grep 'elf64-big' >/dev/null 2>&1; \
+	then echo 'riscv64-linux-gnu-'; \
+	elif riscv64-unknown-linux-gnu-objdump -i 2>&1 | grep 'elf64-big' >/dev/null 2>&1; \
+	then echo 'riscv64-unknown-linux-gnu-'; \
+	else echo "***" 1>&2; \
+	echo "*** Error: Couldn't find a riscv64 version of GCC/binutils." 1>&2; \
+	echo "*** To turn off this error, run 'gmake TOOLPREFIX= ...'." 1>&2; \
+	echo "***" 1>&2; exit 1; fi)
+endif
 
-# gcc的相关命令参数
-# $(DEFS) 定义一些可能的参数
-# -O0 0优化，保证程序按照代码语义走而不被优化，方便调试
-# -fno-builtin 静止使用gcc内置函数，具体查手册
-CFLAGS	:= $(CFLAGS) $(DEFS) -O0 -fno-builtin
-# -I 编译时去指定文件夹查找头文件
-# -MD 一个黑科技暂时可以不需要了解，总之是在头文件依赖变动的时候能够及时更新target
-CFLAGS	+= -I $(INCDIR) -MD
-# -fno-stack-protector 禁止栈保护（金丝雀保护机制，内核代码扛不住）
-CFLAGS	+= -fno-stack-protector
-# -std=gnu99 规定编译的语言规范为gnu99
-CFLAGS	+= -std=gnu99
-# -fno-pie 不创建动态链接库
-CFLAGS	+= -fno-pie
-# -static 编译静态程序
-# -m32 编译32位程序
-CFLAGS	+= -static -m32
-# -g 打开gdb调试信息，能够允许gdb的时候调试
-CFLAGS	+= -g
-# 一车的warning，在编译的时候可能会很有用
-CFLAGS	+= -Wall -Wno-format -Wno-unused -Werror
+QEMU = qemu-system-riscv64
 
-# ld链接器的相关命令参数
-# -m elf_i386 链接的格式为i386
-LDFLAGS	:= -m elf_i386
-# -nostdlib 不链接gcc的标准库，用库只能用命令行的
-LDFLAGS	+= -nostdlib
+CC = $(TOOLPREFIX)gcc
+AS = $(TOOLPREFIX)gas
+LD = $(TOOLPREFIX)ld
+OBJCOPY = $(TOOLPREFIX)objcopy
+OBJDUMP = $(TOOLPREFIX)objdump
 
-# 获取gcc的库文件（除法取模会用到）
-GCC_LIB	:= $(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
+CFLAGS = -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2
+CFLAGS += -MD
+CFLAGS += -mcmodel=medany
+CFLAGS += -ffreestanding -fno-common -nostdlib -mno-relax
+CFLAGS += -I.
+CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
 
-# 记录每个OBJDIR里存放的每个子文件夹
-OBJDIRS	:=
+# Disable PIE when possible (for Ubuntu 16.10 toolchain)
+ifneq ($(shell $(CC) -dumpspecs 2>/dev/null | grep -e '[^f]no-pie'),)
+CFLAGS += -fno-pie -no-pie
+endif
+ifneq ($(shell $(CC) -dumpspecs 2>/dev/null | grep -e '[^f]nopie'),)
+CFLAGS += -fno-pie -nopie
+endif
 
-# 保证all是第一个target，这样make的时候会先执行all
-# all的依赖会在kern/Makefrag中填充
-all:
+LDFLAGS = -z max-page-size=4096
 
-.DELETE_ON_ERROR:
+$K/kernel: $(OBJS) $K/kernel.ld $U/initcode
+	$(LD) $(LDFLAGS) -T $K/kernel.ld -o $K/kernel $(OBJS) 
+	$(OBJDUMP) -S $K/kernel > $K/kernel.asm
+	$(OBJDUMP) -t $K/kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $K/kernel.sym
 
-# xv6黑科技，获取编译命令，如果命令较新则重新编译所有文件
-.PRECIOUS: 	$(OBJDIR)/.vars.%	\
-		$(OBJDIR)/kernel/%.o $(OBJDIR)/kernel/%.d	\
-		$(OBJDIR)/user/%.o $(OBJDIR)/user/%.d	\
-		$(OBJDIR)/lib/%.o $(OBJDIR)/lib/%.d
-$(OBJDIR)/.vars.%: FORCE
-	@echo "$($*)" | cmp -s $@ || echo "$($*)" > $@
-.PHONY: FORCE
+$U/initcode: $U/initcode.S
+	$(CC) $(CFLAGS) -march=rv64g -nostdinc -I. -Ikernel -c $U/initcode.S -o $U/initcode.o
+	$(LD) $(LDFLAGS) -N -e start -Ttext 0 -o $U/initcode.out $U/initcode.o
+	$(OBJCOPY) -S -O binary $U/initcode.out $U/initcode
+	$(OBJDUMP) -S $U/initcode.o > $U/initcode.asm
 
-include boot/Makefrag
-include lib/Makefrag
-include kernel/Makefrag
-include user/Makefrag
-include fs_flags/Makefrag
+tags: $(OBJS) _init
+	etags *.S *.c
 
-# FAT32镜像文件
-IMAGE = $(OBJDIR)/a.img
-BUILD_IMAGE_SCRIPT = build_img.sh
- 
-# added by mingxuan 2020-9-12
-# Offset of os_boot in hd
-# 活动分区所在的扇区号
-# OSBOOT_SEC = 4096
-# 活动分区所在的扇区号对应的字节数
-# OSBOOT_OFFSET = $(OSBOOT_SEC)*512 
-OSBOOT_OFFSET = 1048576
-# FAT32规范规定os_boot的前89个字节是FAT32的配置信息
-# OSBOOT_START_OFFSET = OSBOOT_OFFSET + 90
-OSBOOT_START_OFFSET = 1048666 # for test12.img
+ULIB = $U/ulib.o $U/usys.o $U/printf.o $U/umalloc.o
 
-# added by mingxuan 2020-10-29
-# Offset of fs in hd
-# 文件系统标志所在扇区号 = 文件系统所在分区的第1个扇区 + 1
-# ORANGE_FS_SEC = 6144 + 1 = 6145
-# 文件系统标志所在扇区 = $(ORANGE_FS_SEC)*512
-ORANGE_FS_START_OFFSET = 3146240
-# FAT32_FS_SEC = 53248 + 1 = 53249
-# 文件系统标志所在扇区 = $(ORANGE_FS_SEC)*512
-FAT32_FS_START_OFFSET = 27263488
+_%: %.o $(ULIB)
+	$(LD) $(LDFLAGS) -T $U/user.ld -o $@ $^
+	$(OBJDUMP) -S $@ > $*.asm
+	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $*.sym
 
-# oranges文件系统在硬盘上的起始扇区
-# PART_START_SECTOR = 92049
-PART_START_SECTOR = 6144	# modified by mingxuan 2020-10-12
+$U/usys.S : $U/usys.pl
+	perl $U/usys.pl > $U/usys.S
 
-# 写入硬盘的起始位置
-# INSTALL_PHY_SECTOR = PART_START_SECTOR + 951 # Why is 951 ?
-INSTALL_PHY_SECTOR = 7095	# modified by mingxuan 2020-10-12
-# assert(INSTALL_PHY_SECTOR > PART_START_SECTOR)
+$U/usys.o : $U/usys.S
+	$(CC) $(CFLAGS) -c -o $U/usys.o $U/usys.S
 
-# 写入硬盘的文件大小
-INSTALL_NR_SECTORS = 1000
+$U/_forktest: $U/forktest.o $(ULIB)
+	# forktest has less library code linked in - needs to be small
+	# in order to be able to max out the proc table.
+	$(LD) $(LDFLAGS) -N -e main -Ttext 0 -o $U/_forktest $U/forktest.o $U/ulib.o $U/usys.o
+	$(OBJDUMP) -S $U/_forktest > $U/forktest.asm
 
-INSTALL_START_SECTOR = $(shell echo $$(($(INSTALL_PHY_SECTOR)-$(PART_START_SECTOR))))
-SUPER_BLOCK_ADDR = $(shell echo $$((($(PART_START_SECTOR)+1)*512)))
+mkfs/mkfs: mkfs/mkfs.c $K/fs.h $K/param.h
+	gcc -Werror -Wall -I. -o mkfs/mkfs mkfs/mkfs.c
 
-INSTALL_TYPE = INSTALL_TAR
+# Prevent deletion of intermediate files, e.g. cat.o, after first build, so
+# that disk image changes after first build are persistent until clean.  More
+# details:
+# http://www.gnu.org/software/make/manual/html_node/Chained-Rules.html
+.PRECIOUS: %.o
 
-INSTALL_FILENAME = app.tar
+UPROGS=\
+	$U/_cat\
+	$U/_echo\
+	$U/_forktest\
+	$U/_grep\
+	$U/_init\
+	$U/_kill\
+	$U/_ln\
+	$U/_ls\
+	$U/_mkdir\
+	$U/_rm\
+	$U/_sh\
+	$U/_stressfs\
+	$U/_usertests\
+	$U/_grind\
+	$U/_wc\
+	$U/_zombie\
 
-$(IMAGE): 	$(OBJDIR)/boot/mbr.bin		\
-		$(OBJDIR)/boot/boot.bin		\
-		$(OBJDIR)/boot/loader.bin	\
-		$(OBJDIR)/kernel/kernel.bin	\
-		$(BUILD_IMAGE_SCRIPT)		\
-		$(OBJDIR)/user/$(USER_TAR)	\
-		$(FS_FLAG_OBJFILES)
-	@./build_img.sh $@ $(OBJDIR) $(OSBOOT_START_OFFSET)
-	@dd if=$(OBJDIR)/user/$(USER_TAR) of=$@ bs=512 count=$(INSTALL_NR_SECTORS) seek=$(INSTALL_PHY_SECTOR) conv=notrunc
-	@dd if=$(OBJDIR)/fs_flags/orange_flag.bin of=$@ bs=1 count=1 seek=$(ORANGE_FS_START_OFFSET) conv=notrunc
-	@dd if=$(OBJDIR)/fs_flags/fat32_flag.bin of=$@ bs=1 count=11 seek=$(FAT32_FS_START_OFFSET) conv=notrunc
+fs.img: mkfs/mkfs README $(UPROGS)
+	mkfs/mkfs fs.img README $(UPROGS)
 
-all: $(IMAGE)
+-include kernel/*.d user/*.d
 
-clean:
-	@rm -rf $(OBJDIR)
+clean: 
+	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
+	*/*.o */*.d */*.asm */*.sym \
+	$U/initcode $U/initcode.out $K/kernel fs.img \
+	mkfs/mkfs .gdbinit \
+        $U/usys.S \
+	$(UPROGS)
 
-run: $(IMAGE)
-	@qemu-system-i386		\
-	-boot order=a			\
-	-drive file=$<,format=raw	\
+# try to generate a unique GDB port
+GDBPORT = $(shell expr `id -u` % 5000 + 25000)
+# QEMU's gdb stub command line changed in 0.11
+QEMUGDB = $(shell if $(QEMU) -help | grep -q '^-gdb'; \
+	then echo "-gdb tcp::$(GDBPORT)"; \
+	else echo "-s -p $(GDBPORT)"; fi)
+ifndef CPUS
+CPUS := 3
+endif
 
-gdb: $(IMAGE)
-	@qemu-system-i386		\
-	-boot order=a			\
-	-drive file=$<,format=raw	\
-	-s -S				\
+QEMUOPTS = -machine virt -bios none -kernel $K/kernel -m 128M -smp $(CPUS) -nographic
+QEMUOPTS += -global virtio-mmio.force-legacy=false
+QEMUOPTS += -drive file=fs.img,if=none,format=raw,id=x0
+QEMUOPTS += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 
-gdb-no-graphic: $(IMAGE)
-	@qemu-system-i386		\
-	-nographic			\
-	-boot order=a			\
-	-drive file=$<,format=raw	\
-	-s -S				\
+qemu: $K/kernel fs.img
+	$(QEMU) $(QEMUOPTS)
 
-# 调试的内核代码elf
-KERNDBG := $(OBJDIR)/kernel/kernel.dbg
+.gdbinit: .gdbinit.tmpl-riscv
+	sed "s/:1234/:$(GDBPORT)/" < $^ > $@
 
-monitor: $(IMAGE)
-	@gdb                            	\
-	-ex 'set confirm off'			\
-	-ex 'target remote localhost:1234'	\
-	-ex 'file $(KERNDBG)'			
+qemu-gdb: $K/kernel .gdbinit fs.img
+	@echo "*** Now run 'gdb' in another window." 1>&2
+	$(QEMU) $(QEMUOPTS) -S $(QEMUGDB)
 
-disassemble: $(IMAGE)
-	@$(OBJDUMP) -S $(KERNDBG) | less
-
-# 黑科技时间，获取每个.c对应的头文件依赖
-# 挺难整明白的，不建议一开始整明白，反正从xv6上抄的，不明觉厉
-$(OBJDIR)/.deps: $(foreach dir, $(OBJDIRS), $(wildcard $(OBJDIR)/$(dir)/*.d))
-	@mkdir -p $(@D)
-	@perl mergedep.pl $@ $^
-
--include $(OBJDIR)/.deps
-
-.PHONY: all clean run gdb gdb-no-graphic monitor disassemble
