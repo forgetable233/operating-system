@@ -41,7 +41,7 @@
 				       fsbuf);
 
 
-#define BUF_SIZE 1
+// #define BUF_SIZE 64
 static u8 buf_cache[BUF_SIZE][SECTOR_SIZE];  // 缓冲区定义
 /* 缓冲块状态，
 CLEAN表示缓冲块数据与磁盘数据同步，
@@ -151,10 +151,9 @@ static void grow_buf(int dev, int block)
 		return;
 	}
 	// 如果该缓冲块的状态为DIRTY，那么需要先将缓冲块中的数据写入磁盘，然后分配给新的数据块
-	int orange_dev = get_fs_dev(PRIMARY_MASTER, ORANGE_TYPE);
 	u8 hdbuf[512];
 	memcpy(hdbuf, bhead->pos, SECTOR_SIZE);
-	WR_SECT_BUF(orange_dev, block, hdbuf);
+	WR_SECT_BUF(bhead->dev, bhead->block, hdbuf);
 	bhead->dev = dev, bhead->block = block;
 	bhead->state = UNUSED;
 	return;
@@ -194,11 +193,12 @@ void read_buf(void* addr, int dev, int block, int size)
 	bh = getblk(dev, block);
 	if (bh->state == CLEAN || bh->state == DIRTY)
 	{
+		// kprintf("enter buffer\n")		;
 		memcpy(addr, bh->pos, size);
 		return;
-	}
-	else if (bh->state == UNUSED)
+	} else if (bh->state == UNUSED)
 	{
+		// kprintf("========================================================\n");
 		// 先将磁盘中的数据读入到缓冲块中
 		// int orange_dev = get_fs_dev(PRIMARY_MASTER, ORANGE_TYPE);
 		u8 hdbuf[512];
@@ -216,6 +216,7 @@ void write_buf(void* addr, int dev, int block, int size)
 {
 	struct buf_head* bh;
 	bh = getblk(dev, block);
+	
 	memcpy(bh->pos, addr, size);
 	bh->state = DIRTY;
 	return;
@@ -223,6 +224,7 @@ void write_buf(void* addr, int dev, int block, int size)
 
 // 清空缓冲区并写入硬盘
 void refresh_buf() {
+	kprintf("enter refresh buf\n");
 	for (int i = 0; i < BUF_SIZE; i++) {
 		if (bh[i].busy){
 			bh[i].busy = false;
@@ -230,6 +232,7 @@ void refresh_buf() {
 
 			push_to_free(bh + i);
 			WR_SECT(bh[i].dev, bh[i].block, bh[i].pos);
+			kprintf("\nwrite hd\n");
 		}
 	}
 }

@@ -6,7 +6,7 @@
 #include "global.h"
 #include "proto.h"
 #include "stdio.h"
-// #include "hd.h"
+#include "hd.h"
 
 int main(int arg, char *argv[])
 {
@@ -14,7 +14,7 @@ int main(int arg, char *argv[])
 	int stdout = open("dev_tty0", O_RDWR);
 	int stderr = open("dev_tty0", O_RDWR);
 
-	char buf[1024];
+	char buf[1024] = "orange/RWFile.bin";
 	int pid;
 	int times = 0;
 	// refresh_buf();

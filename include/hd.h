@@ -275,6 +275,7 @@ struct hd_info
 #define ATA_IDENTIFY		0xEC
 #define ATA_READ		0x20
 #define ATA_WRITE		0x30
+#define BUF_SIZE        64
 /* for DEVICE register. */
 #define	MAKE_DEVICE_REG(lba,drv,lba_highest) (((lba) << 6) |		\
 					      ((drv) << 4) |		\
