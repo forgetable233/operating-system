@@ -41,7 +41,7 @@
 				       fsbuf);
 
 
-#define BUF_SIZE 64
+#define BUF_SIZE 1
 static u8 buf_cache[BUF_SIZE][SECTOR_SIZE];  // 缓冲区定义
 /* 缓冲块状态，
 CLEAN表示缓冲块数据与磁盘数据同步，
