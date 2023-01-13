@@ -38,6 +38,7 @@ static void init_hd_queue(HDQueue *hdq);
 static void in_hd_queue(HDQueue *hdq, RWInfo *p);
 static int  out_hd_queue(HDQueue *hdq, RWInfo **p);
 static void hd_rdwt_real(RWInfo *p);
+static volatile int hd_int_waiting_flag;
 
 static void get_part_table(int drive, int sect_nr, struct part_ent *entry);
 static void partition(int device, int style);
@@ -203,7 +204,6 @@ void hd_rdwt(MESSAGE * p)
 			if (!waitfor(STATUS_DRQ, STATUS_DRQ, HD_TIMEOUT))
 				("hd writing error.");
 
-			// 这里待定，感觉写的时候以及可以释放掉对应的cache了
 			memcpy(hdbuf, la, bytes);
 			outsw(REG_DATA, hdbuf, SECTOR_SIZE);
 			interrupt_wait();

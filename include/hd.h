@@ -295,8 +295,6 @@ typedef struct
 	RWInfo *rear;
 } HDQueue;
 
-volatile int hd_int_waiting_flag;
-
 void init_hd();
 void hd_open(int device);
 void hd_close(int device);
