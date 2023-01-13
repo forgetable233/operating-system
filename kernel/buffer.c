@@ -41,7 +41,6 @@
 				       fsbuf);
 
 
-#define BUF_SIZE 64
 static u8 buf_cache[BUF_SIZE][SECTOR_SIZE];  // 缓冲区定义
 /* 缓冲块状态，
 CLEAN表示缓冲块数据与磁盘数据同步，
@@ -151,10 +150,9 @@ static void grow_buf(int dev, int block)
 		return;
 	}
 	// 如果该缓冲块的状态为DIRTY，那么需要先将缓冲块中的数据写入磁盘，然后分配给新的数据块
-	int orange_dev = get_fs_dev(PRIMARY_MASTER, ORANGE_TYPE);
 	u8 hdbuf[512];
 	memcpy(hdbuf, bhead->pos, SECTOR_SIZE);
-	WR_SECT_BUF(orange_dev, block, hdbuf);
+	WR_SECT_BUF(bhead->dev, bhead->block, hdbuf);
 	bhead->dev = dev, bhead->block = block;
 	bhead->state = UNUSED;
 	return;
