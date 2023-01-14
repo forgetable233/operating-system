@@ -29,7 +29,6 @@ struct part_ent PARTITION_ENTRY;
 
 //added by xw, 18/8/28
 static HDQueue hdque;
-static volatile int hd_int_waiting_flag;
 static	u8 hd_status;
 static	u8 hdbuf[SECTOR_SIZE * 2];
 //static	struct hd_info hd_info[1];
@@ -39,6 +38,7 @@ static void init_hd_queue(HDQueue *hdq);
 static void in_hd_queue(HDQueue *hdq, RWInfo *p);
 static int  out_hd_queue(HDQueue *hdq, RWInfo **p);
 static void hd_rdwt_real(RWInfo *p);
+static volatile int hd_int_waiting_flag;
 
 static void get_part_table(int drive, int sect_nr, struct part_ent *entry);
 static void partition(int device, int style);
@@ -132,10 +132,13 @@ void hd_close(int device)
  *****************************************************************************/
 void hd_rdwt(MESSAGE * p)
 {
+	// kprintf("enter hd rdwt\n");
 	int drive = DRV_OF_DEV(p->DEVICE);
 
 	u64 pos = p->POSITION;
 
+	struct buf_head* buf_ptr = NULL;
+	
 	//We only allow to R/W from a SECTOR boundary:
 
 	u32 sect_nr = (u32)(pos >> SECTOR_SIZE_SHIFT);	// pos / SECTOR_SIZE
@@ -144,6 +147,10 @@ void hd_rdwt(MESSAGE * p)
 		hd_info[drive].primary[p->DEVICE].base :
 		hd_info[drive].logical[logidx].base;
 
+	int bytes_left = p->CNT;
+	void * la = (void*)va2la(p->PROC_NR, p->BUF);
+
+	// 下面为确定需要进行磁盘访问，进行缓冲区的维护等任务
 	struct hd_cmd cmd;
 	cmd.features	= 0;
 	cmd.count	= (p->CNT + SECTOR_SIZE - 1) / SECTOR_SIZE;
@@ -154,8 +161,28 @@ void hd_rdwt(MESSAGE * p)
 	cmd.command	= (p->type == DEV_READ) ? ATA_READ : ATA_WRITE;
 	hd_cmd_out(&cmd);
 
-	int bytes_left = p->CNT;
-	void * la = (void*)va2la(p->PROC_NR, p->BUF);
+	// 首先尝试在缓冲区中寻找，一次读一个扇区
+	// if ((buf_ptr = get_buf(p->DEVICE, sect_nr))) {
+	// 	// 在缓冲区中能够找到对应的buf，则不需要进行磁盘访问, 直接将数据复制到BUF里
+	// 	if (p->type == DEV_READ) {
+	// 		memcpy(hdbuf, buf_ptr->pos, SECTOR_SIZE);
+	// 		memcpy(la, hdbuf, SECTOR_SIZE);
+	// 	} else if (p->type == DEV_WRITE) {
+	// 		if (!waitfor(STATUS_DRQ, STATUS_DRQ, HD_TIMEOUT))
+	// 			("hd writing error.");
+
+	// 		memcpy(hdbuf, la, SECTOR_SIZE);
+	// 		memcpy(buf_ptr->pos, hdbuf, SECTOR_SIZE);
+	// 		buf_ptr->state = DIRTY;
+
+	// 		interrupt_wait();
+
+	// 	} else {
+	// 		panic("error occurr \n");
+	// 	}
+	// 	buf_ptr->count = 0;
+	// 	return;
+	// }
 
 	while (bytes_left) {
 		int bytes = min(SECTOR_SIZE, bytes_left);
@@ -163,6 +190,14 @@ void hd_rdwt(MESSAGE * p)
 			interrupt_wait();
 			insw(REG_DATA, hdbuf, SECTOR_SIZE);
 			memcpy(la, hdbuf, bytes);
+			// if ((buf_ptr = getblk(p->DEVICE, sect_nr))) {
+			// 	memcpy(buf_ptr->pos, la, bytes);
+			// 	memset(buf_ptr->pos + bytes, 0, SECTOR_SIZE - bytes);
+			// 	// panic("test\n");
+			// } else {
+			// 	panic("unable to find a free buffer\n");
+			// }
+			// kprintf("\nout\n");
 		}
 		else {
 			if (!waitfor(STATUS_DRQ, STATUS_DRQ, HD_TIMEOUT))
@@ -175,6 +210,7 @@ void hd_rdwt(MESSAGE * p)
 		bytes_left -= SECTOR_SIZE;
 		la += SECTOR_SIZE;
 	}
+	// kprintf("\nout\n");
 }
 
 //added by xw, 18/8/26
@@ -189,33 +225,34 @@ void hd_service()
 		//the hd queue is not empty when out_hd_queue return 1.
 		while(out_hd_queue(&hdque, &rwinfo))
 		{
-			// hd_rdwt_real(rwinfo);
+			hd_rdwt_real(rwinfo);
 			// rwinfo->proc->task.stat = READY;
-			int drive = DRV_OF_DEV(rwinfo->msg->DEVICE);
-			u64 pos = rwinfo->msg->POSITION;
-			u32 sect_nr = (u32)(pos >> SECTOR_SIZE_SHIFT);	// pos / SECTOR_SIZE
-			int logidx = (rwinfo->msg->DEVICE - MINOR_hd1a) % NR_SUB_PER_DRIVE;
-			sect_nr += rwinfo->msg->DEVICE < MAX_PRIM ?
-				hd_info[drive].primary[rwinfo->msg->DEVICE].base :
-				hd_info[drive].logical[logidx].base;
+			// int drive = DRV_OF_DEV(rwinfo->msg->DEVICE);
+			// u64 pos = rwinfo->msg->POSITION;
+			// u32 sect_nr = (u32)(pos >> SECTOR_SIZE_SHIFT);	// pos / SECTOR_SIZE
+			// int logidx = (rwinfo->msg->DEVICE - MINOR_hd1a) % NR_SUB_PER_DRIVE;
+			// sect_nr += rwinfo->msg->DEVICE < MAX_PRIM ?
+			// 	hd_info[drive].primary[rwinfo->msg->DEVICE].base :
+			// 	hd_info[drive].logical[logidx].base;
 
-			int bytes_left = rwinfo->msg->CNT;
-			void *la = rwinfo->kbuf;
+			// int bytes_left = rwinfo->msg->CNT;
+			// void *la = rwinfo->kbuf;
 			
-			while (bytes_left) {
-				int bytes = min(SECTOR_SIZE, bytes_left);
-				if (rwinfo->msg->type == DEV_READ) {
-					read_buf(la, rwinfo->msg->DEVICE, sect_nr, bytes);
-				}
-				else {
-					if (!waitfor(STATUS_DRQ, STATUS_DRQ, HD_TIMEOUT))
-						panic("hd writing error.");
+			// while (bytes_left) {
+			// 	int bytes = min(SECTOR_SIZE, bytes_left);
+			// 	if (rwinfo->msg->type == DEV_READ) {
+			// 		read_buf(la, rwinfo->msg->DEVICE, sect_nr, bytes);
+			// 	}
+			// 	else {
+			// 		if (!waitfor(STATUS_DRQ, STATUS_DRQ, HD_TIMEOUT))
+			// 			panic("hd writing error.");
 
-					write_buf(la, rwinfo->msg->DEVICE, sect_nr, bytes);
-				}
-				bytes_left -= SECTOR_SIZE;
-				la += SECTOR_SIZE;
-			}
+			// 		// WR_SECT_BUF(rwinfo->msg->DEVICE, sect_nr, la);
+			// 		write_buf(la, rwinfo->msg->DEVICE, sect_nr, bytes);
+			// 	}
+			// 	bytes_left -= SECTOR_SIZE;
+			// 	la += SECTOR_SIZE;
+			// }
 			rwinfo->proc->task.stat = READY;
 		}
 		yield();

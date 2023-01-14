@@ -92,12 +92,6 @@ void init_fs()
 {
 
 	kprintf("Initializing file system...  ");
-	// u8 fsbuf1[SECTOR_SIZE] = "This is a test.";
-	// u8 fsbuf2[SECTOR_SIZE];
-	// RD_SECT(800, 1, fsbuf2);
-	// WR_SECT(800, 1, fsbuf1);
-	// RD_SECT(800, 2, fsbuf2);
-	// RD_SECT(800, 1, fsbuf1);
 	
 	int i;
 	for (i = 0; i < NR_INODE; i++)
@@ -188,10 +182,11 @@ static void mkfs()
 
 	memset(fsbuf, 0x90, SECTOR_SIZE);
 	memcpy(fsbuf, &sb, SUPER_BLOCK_SIZE);
+	kprintf("test\n");
 
 	/* write the super block */
 	WR_SECT_BUF(orange_dev, 1, fsbuf);	// modified by mingxuan 2020-10-27
-
+	// panic("break\n");
 	kprintf("devbase:0x%x00", (geo.base + 0) * 2);
 	kprintf(" sb:0x%x00", (geo.base + 1) * 2);
 	kprintf(" imap:0x%x00", (geo.base + 2) * 2);
@@ -206,7 +201,7 @@ static void mkfs()
 	for (i = 0; i < (NR_CONSOLES + 3); i++)	  //modified by mingxuan 2019-5-22
 		fsbuf[0] |= 1 << i;
 
-	
+	kprintf("\nbegin write two\n");
 	WR_SECT_BUF(orange_dev, 2, fsbuf);	//modified by mingxuan 2020-10-27
 
 	/************************/
@@ -353,6 +348,7 @@ static int rw_sector(int io_type, int dev, u64 pos, int bytes, int proc_nr, void
 //added by xw, 18/8/27
 static int rw_sector_sched(int io_type, int dev, int pos, int bytes, int proc_nr, void* buf)
 {
+	kprintf("\nenter\n");
 	MESSAGE driver_msg;
 	
 	driver_msg.type		= io_type;
@@ -1131,6 +1127,14 @@ static int do_close(int fd)
 	p_proc_current->task.filp[fd]->flag = 0; //added by mingxuan 2019-5-17
 	p_proc_current->task.filp[fd] = 0;
 
+	int dev = p_proc_current->task.filp[fd]->fd_node.fd_inode->i_dev;
+	int begin_sec = p_proc_current->task.filp[fd]->fd_node.fd_inode->i_start_sect;
+	int sec_num = p_proc_current->task.filp[fd]->fd_node.fd_inode->i_nr_sects;
+	for (int i = 0; i < sec_num; i++) {
+		int tar_sec = begin_sec + i;
+		Free_buf(dev, tar_sec);
+	}
+	// struct buf_head* bh = getblk();
 	return 0;
 }
 

@@ -281,8 +281,6 @@ struct hd_info
 					      ((drv) << 4) |		\
 					      (lba_highest & 0xF) | 0xA0)
 
-
-
 // added by xw, 18/8/26
 typedef struct rdwt_info
 {
@@ -298,6 +296,21 @@ typedef struct
 	RWInfo *rear;
 } HDQueue;
 
+
+#define RD_SECT_BUF(dev,sect_nr,fsbuf) rw_sector(DEV_READ, \
+				       dev,				\
+				       (sect_nr) * SECTOR_SIZE,		\
+				       SECTOR_SIZE, /* read one sector */ \
+				       proc2pid(p_proc_current),/*TASK_A*/			\
+				       fsbuf);
+
+#define WR_SECT_BUF(dev,sect_nr,fsbuf) rw_sector(DEV_WRITE, \
+				       dev,				\
+				       (sect_nr) * SECTOR_SIZE,		\
+				       SECTOR_SIZE, /* write one sector */ \
+				       proc2pid(p_proc_current),				\
+				       fsbuf);
+
 void init_hd();
 void hd_open(int device);
 void hd_close(int device);
@@ -306,6 +319,10 @@ void hd_service();
 void init_buf();
 void read_buf(void* addr, int dev, int block, int size);
 void write_buf(void* addr, int dev, int block, int size);
+void Free_buf(int dev, int block);
+struct buf_head* getblk(int dev, int block);
+// void refresh_buf();
+// void free_buf(struct buf_head* bh);
 
 void hd_rdwt(MESSAGE *p);
 void hd_rdwt_sched(MESSAGE *p);

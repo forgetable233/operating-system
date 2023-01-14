@@ -74,12 +74,12 @@ int kernel_main()
     enable_irq(CLOCK_IRQ);                     /* 让8259A可以接收时钟中断 */	
 	
 	init_kb();	//added by mingxuan 2019-5-19
-	
-	/* initialize hd-irq and hd rdwt queue */
-	init_hd();
 
 	/* initialize hard disk buffer cache*/
 	init_buf();
+	
+	/* initialize hd-irq and hd rdwt queue */
+	init_hd();
 	
 	/* enable interrupt, we should read information of some devices by interrupt.
 	 * Note that you must have initialized all devices ready before you enable
@@ -119,8 +119,13 @@ int kernel_main()
 	
 	p_proc_current = proc_table;
 	kernel_initial = 0;	//kernel initialization is done. added by xw, 18/5/31
+	// refresh_buf();
+	// kprintf
 	restart_initial();	//modified by xw, 18/4/19
-	while(1){}
+	// kprintf("===========================================================\n");
+
+	while(1){
+	}
 }
 
 /*************************************************************************
