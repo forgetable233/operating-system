@@ -184,7 +184,6 @@ void hd_rdwt(MESSAGE * p)
 	// 	return;
 	// }
 
-	// 这个循环的意义还不是很清楚。。。。目前看来，btyes_left一定是SECTOR_SIZE
 	while (bytes_left) {
 		int bytes = min(SECTOR_SIZE, bytes_left);
 		if (p->type == DEV_READ) {

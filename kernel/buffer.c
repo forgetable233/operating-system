@@ -182,12 +182,12 @@ void read_buf(void* addr, int dev, int block, int size)
 	bh = getblk(dev, block);
 	if (bh->state == CLEAN || bh->state == DIRTY)
 	{
-		// kprintf("enter buffer\n")		;
+		kprintf("enter buffer\n")		;
 		memcpy(addr, bh->pos, size);
 		// free_buf(bh);
 		return;
 	} else if (bh->state == UNUSED) {
-		// kprintf("========================================================\n");
+		kprintf("========================================================\n");
 		// 先将磁盘中的数据读入到缓冲块中
 		// int orange_dev = get_fs_dev(PRIMARY_MASTER, ORANGE_TYPE);
 		u8 hdbuf[512];
