@@ -1141,13 +1141,13 @@ static int do_close(int fd)
 	p_proc_current->task.filp[fd]->flag = 0; //added by mingxuan 2019-5-17
 	p_proc_current->task.filp[fd] = 0;
 
-	int dev = p_proc_current->task.filp[fd]->fd_node.fd_inode->i_dev;
-	int begin_sec = p_proc_current->task.filp[fd]->fd_node.fd_inode->i_start_sect;
-	int sec_num = p_proc_current->task.filp[fd]->fd_node.fd_inode->i_nr_sects;
-	for (int i = 0; i < sec_num; i++) {
-		int tar_sec = begin_sec + i;
-		Free_buf(dev, tar_sec);
-	}
+	// int dev = p_proc_current->task.filp[fd]->fd_node.fd_inode->i_dev;
+	// int begin_sec = p_proc_current->task.filp[fd]->fd_node.fd_inode->i_start_sect;
+	// int sec_num = p_proc_current->task.filp[fd]->fd_node.fd_inode->i_nr_sects;
+	// for (int i = 0; i < sec_num; i++) {
+	// 	int tar_sec = begin_sec + i;
+	// 	Free_buf(dev, tar_sec);
+	// }
 	// struct buf_head* bh = getblk();
 	int dev = p_proc_current->task.filp[fd]->fd_node.fd_inode->i_dev;
 	int begin_sec = p_proc_current->task.filp[fd]->fd_node.fd_inode->i_start_sect;
