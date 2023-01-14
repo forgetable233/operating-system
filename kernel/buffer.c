@@ -142,13 +142,13 @@ static void grow_buf(int dev, int block)
 	// bh = head->nxt;
 	bhead = &bh[0];
 	// 如果该缓冲块的状态为CLEAN或者UNUSED，那么没必要写入磁盘，直接分配即可
-	// if (bhead->state == CLEAN || bhead->state == UNUSED)
-	// {
-	// 	bhead->dev = dev, bhead->block = block;
-	// 	bhead->busy = true;
-	// 	bhead->state = UNUSED;
-	// 	return;
-	// }
+	if (bhead->state == CLEAN || bhead->state == UNUSED)
+	{
+		bhead->dev = dev, bhead->block = block;
+		bhead->busy = true;
+		bhead->state = UNUSED;
+		return;
+	}
 	// 如果该缓冲块的状态为DIRTY，那么需要先将缓冲块中的数据写入磁盘，然后分配给新的数据块
 	u8 hdbuf[512];
 	memcpy(hdbuf, bhead->pos, SECTOR_SIZE);

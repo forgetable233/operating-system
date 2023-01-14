@@ -92,6 +92,12 @@ void init_fs()
 {
 
 	kprintf("Initializing file system...  ");
+	// u8 fsbuf1[SECTOR_SIZE] = "This is a test.";
+	u8 fsbuf2[SECTOR_SIZE];
+	// RD_SECT(800, 1, fsbuf2);
+	// WR_SECT(800, 1, fsbuf1);
+	// RD_SECT(800, 2, fsbuf2);
+	// RD_SECT(800, 1, fsbuf1);
 	
 	int i;
 	for (i = 0; i < NR_INODE; i++)
@@ -610,7 +616,7 @@ static int search_file(char * path)
 	for (i = 0; i < nr_dir_blks; i++) {
 		//RD_SECT_SCHED(dir_inode->i_dev, dir_blk0_nr + i, fsbuf);	//modified by xw, 18/12/27
 		// 每次读一个扇区，将扇区中的数据与文件名称相比较，判断是否找到了对应的文件，这里开始可以使用buf了
-		RD_SECT_TEST(dir_inode->i_dev, dir_blk0_nr + i, fsbuf);	//modified by mingxuan 2019-5-20
+		RD_SECT(dir_inode->i_dev, dir_blk0_nr + i, fsbuf);	//modified by mingxuan 2019-5-20
 		// read_buf(fsbuf, dir_inode->i_dev, dir_blk0_nr + i, SECTOR_SIZE);
 		pde = (struct dir_entry *)fsbuf;
 		for (j = 0; j < SECTOR_SIZE / DIR_ENTRY_SIZE; j++,pde++) {
@@ -1270,7 +1276,7 @@ static int do_rdwt(MESSAGE *fs_msg)
 			// 	  chunk * SECTOR_SIZE,
 			// 	  proc2pid(p_proc_current),	/// TASK_FS
 			// 	  fsbuf);
-			RD_SECT_TEST(pin->i_dev, i, fsbuf);
+			RD_SECT(pin->i_dev, i, fsbuf);
 
 			if (fs_msg->type == READ) {
 				memcpy((void*)va2la(src, buf + bytes_rw),
@@ -1288,7 +1294,7 @@ static int do_rdwt(MESSAGE *fs_msg)
 				// 	  chunk * SECTOR_SIZE,
 				// 	  proc2pid(p_proc_current),
 				// 	  fsbuf);
-				WR_SECT_TEST(pin->i_dev, i, fsbuf);
+				WR_SECT(pin->i_dev, i, fsbuf);
 			}
 			off = 0;
 			bytes_rw += bytes;
