@@ -186,9 +186,7 @@ void read_buf(void* addr, int dev, int block, int size)
 		// free_buf(bh);
 		return;
 	} else if (bh->state == UNUSED) {
-		// kprintf("========================================================\n");
 		// 先将磁盘中的数据读入到缓冲块中
-		// int orange_dev = get_fs_dev(PRIMARY_MASTER, ORANGE_TYPE);
 		u8 hdbuf[512];
 		RD_SECT_BUF(dev, block, hdbuf);
 		memcpy(bh->pos, hdbuf, SECTOR_SIZE);
