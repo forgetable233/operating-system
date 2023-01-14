@@ -23,23 +23,6 @@
 #include "assert.h"
 
 
-#define	DRV_OF_DEV(dev) (dev <= MAX_PRIM ? \
-			 dev / NR_PRIM_PER_DRIVE : \
-			 (dev - MINOR_hd1a) / NR_SUB_PER_DRIVE)
-#define RD_SECT_BUF(dev,sect_nr,fsbuf) rw_sector(DEV_READ, \
-				       dev,				\
-				       (sect_nr) * SECTOR_SIZE,		\
-				       SECTOR_SIZE, /* read one sector */ \
-				       proc2pid(p_proc_current),/*TASK_A*/			\
-				       fsbuf);
-
-#define WR_SECT_BUF(dev,sect_nr,fsbuf) rw_sector(DEV_WRITE, \
-				       dev,				\
-				       (sect_nr) * SECTOR_SIZE,		\
-				       SECTOR_SIZE, /* write one sector */ \
-				       proc2pid(p_proc_current),				\
-				       fsbuf);
-
 
 static u8 buf_cache[BUF_SIZE][SECTOR_SIZE];  // 缓冲区定义
 /* 缓冲块状态，

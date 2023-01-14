@@ -143,6 +143,24 @@ struct file_desc {
 #define RD_SECT(dev, sect_nr, fsbuf) read_buf(fsbuf, dev, sect_nr, SECTOR_SIZE);
 #define WR_SECT(dev, sect_nr, fsbuf) write_buf(fsbuf, dev, sect_nr, SECTOR_SIZE);
 
+#define	DRV_OF_DEV(dev) (dev <= MAX_PRIM ? \
+			 dev / NR_PRIM_PER_DRIVE : \
+			 (dev - MINOR_hd1a) / NR_SUB_PER_DRIVE)
+#define RD_SECT_BUF(dev,sect_nr,fsbuf) rw_sector(DEV_READ, \
+				       dev,				\
+				       (sect_nr) * SECTOR_SIZE,		\
+				       SECTOR_SIZE, /* read one sector */ \
+				       proc2pid(p_proc_current),/*TASK_A*/			\
+				       fsbuf);
+
+#define WR_SECT_BUF(dev,sect_nr,fsbuf) rw_sector(DEV_WRITE, \
+				       dev,				\
+				       (sect_nr) * SECTOR_SIZE,		\
+				       SECTOR_SIZE, /* write one sector */ \
+				       proc2pid(p_proc_current),				\
+				       fsbuf);
+
+
 //modified by mingxuan 2020-10-27
 #define RD_SECT_FAT(dev, buf, sect_nr) rw_sector_fat(DEV_READ, \
 				       dev,				\
