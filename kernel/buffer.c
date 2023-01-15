@@ -29,13 +29,14 @@
 
 
 // #define BUF_SIZE 64
-static u8 buf_cache[BUF_SIZE][SECTOR_SIZE];  // 缓冲区定义
+static u8 buf_cache[BUF_SIZE][SECTOR_SIZE];  // 缓冲区数据块
 /* 缓冲块状态，
 CLEAN表示缓冲块数据与磁盘数据同步，
 UNUSED表示数据尚未写入，数据无效；
 DIRTY表示缓冲块内为脏数据 */ 
 enum buf_state{UNUSED, CLEAN, DIRTY}; 
 
+// 缓冲块头部，记录了缓冲块的信息
 struct buf_head
 {
 	int count;				// 为以后优化预留
@@ -43,11 +44,13 @@ struct buf_head
 	enum buf_state state; 	// 该缓冲块的状态
 	int dev, block;     	// 设备号，扇区号(只有busy=true时才有效)
 	void* pos;            	// 该缓冲块的起始地址, 为cache的地址
-	// struct buf_head* nxt; 	// 指向下一个缓冲块头部
-	// int nxt;
+	struct buf_head* pre;   // LRU链表指针，指向LRU链表的前一个元素
+	struct buf_head* nxt; 	// 指向下一个缓冲块头部
 };
 
 static struct buf_head bh[BUF_SIZE];
+static struct buf_head head;            // 链表的头结点
+
 typedef struct buf_head_que
 {
 	struct buf_head* bh_list[BUF_SIZE + 1];
@@ -100,6 +103,7 @@ void free_buf(struct buf_head* bh);
 
 void init_buf()
 {
+	head.pre = &head, head.nxt = &head;
 	free_que.front = free_que.rear = 0;
 	for (int i = 0; i < BUF_SIZE; i ++ )
 	{
@@ -108,6 +112,10 @@ void init_buf()
 		bh[i].state = UNUSED;
 		bh[i].dev = 0, bh->block = 0;
 		bh[i].pos = (void*)buf_cache[i];
+		bh[i].nxt = head.nxt;
+		bh[i].pre = &head;
+		head.nxt->pre = &bh[i];
+		head.nxt = &bh[i];
 		push_to_free(&bh[i]);
 	}
 }
@@ -119,6 +127,7 @@ static struct buf_head* get_free_buf(int dev, int block)
 
 	struct buf_head *bhead = pop_from_free();
 	bhead->dev = dev, bhead->block = block;
+	bhead->state = UNUSED;
 	bhead->busy = true;
 
 	return bhead;
@@ -126,11 +135,17 @@ static struct buf_head* get_free_buf(int dev, int block)
 
 static void grow_buf(int dev, int block)
 {
-	// 如果当前没有空闲的缓冲块，则将其中一个缓冲块写入磁盘
-	// bh表示即将分配给新的数据块的缓冲块，暂时先规定为第一个缓冲块
+	// 首先判断当前缓冲区中是否存在空闲缓冲块，如果存在，将该缓冲块分配给当前数据块
 	struct buf_head* bhead;
-	// bh = head->nxt;
-	bhead = &bh[0];
+	bhead = get_free_buf(dev, block);
+	if (bhead) return;
+	// 如果当前没有空闲的缓冲块，则将距离上次使用间隔最长的缓冲块写入磁盘
+	// bh表示即将分配给新的数据块的缓冲块，从LRU链表中搜索
+	// for (bhead = head.pre; bhead != &head; bhead = bhead->pre)
+	// 	if (bhead->count == 0) break;
+	bhead = head.pre;
+	// bhead = &bh[0];
+	assert(bhead != &head);
 	// 如果该缓冲块的状态为CLEAN或者UNUSED，那么没必要写入磁盘，直接分配即可
 	if (bhead->state == CLEAN || bhead->state == UNUSED)
 	{
@@ -164,14 +179,30 @@ struct buf_head* getblk(int dev, int block)
 {
 	for (;;)
 	{
+		// 先判断缓冲区是否命中
 		struct buf_head* bh = get_buf(dev, block);
-		if (bh)
-			return bh;
-		bh = get_free_buf(dev, block);
-		if (bh)
-			return bh;
+		// 命中后直接返回
+		if (bh) { bh->count ++; return bh; }
+		// 没有命中，那么重新分配一个缓冲块
 		else
 			grow_buf(dev, block);
+	}
+}
+
+// 释放缓冲块的使用权
+static void brelse(struct buf_head* b)
+{
+	b->count --;
+	// if (!b->count)
+	{
+		// 将该缓冲块从LRU链表中删除
+		b->nxt->pre = b->pre;
+		b->pre->nxt = b->nxt;
+		// 将该缓冲块添加到链表头
+		b->nxt = head.nxt;
+		b->pre = &head;
+		head.nxt->pre = b;
+		head.nxt = b;
 	}
 }
 
@@ -187,9 +218,7 @@ void read_buf(void* addr, int dev, int block, int size)
 		// free_buf(bh);
 		return;
 	} else if (bh->state == UNUSED) {
-		// kprintf("========================================================\n");
 		// 先将磁盘中的数据读入到缓冲块中
-		// int orange_dev = get_fs_dev(PRIMARY_MASTER, ORANGE_TYPE);
 		u8 hdbuf[512];
 		RD_SECT_BUF(dev, block, hdbuf);
 		memcpy(bh->pos, hdbuf, SECTOR_SIZE);
@@ -198,6 +227,7 @@ void read_buf(void* addr, int dev, int block, int size)
 		// 接下来从缓冲块中读取数据
 		memcpy(addr, bh->pos, size);
 	}
+	brelse(bh);
 	return;
 }
 
@@ -208,6 +238,7 @@ void write_buf(void* addr, int dev, int block, int size)
 	
 	memcpy(bh->pos, addr, size);
 	bh->state = DIRTY;
+	brelse(bh);
 	return;
 }
 
