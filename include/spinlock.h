@@ -14,6 +14,15 @@ struct spinlock {
                  // that locked the lock.
 };
 
+struct mutex{
+  uint locked;
+  struct spinlock lk;
+
+  char *name;
+  int cpu;
+  uint pcs[10];
+};
+
 void initlock(struct spinlock *lock, char *name);
 // Acquire the lock.
 // Loops (spins) until the lock is acquired.

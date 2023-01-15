@@ -46,7 +46,7 @@ struct buf_head
 	void* pos;            	// 该缓冲块的起始地址, 为cache的地址
 	struct buf_head* pre;   // LRU链表指针，指向LRU链表的前一个元素
 	struct buf_head* nxt; 	// 指向下一个缓冲块头部
-	int lock;               // 锁
+	struct spinlock lock;               // 锁
 };
 
 static struct spinlock buf_lock;
@@ -119,7 +119,7 @@ void init_buf()
 		bh[i].pre = &head;
 		head.nxt->pre = &bh[i];
 		head.nxt = &bh[i];
-		bh[i].lock = 0;
+		initlock(&bh[i].lock, "bufferhead");
 		push_to_free(&bh[i]);
 	}
 }
@@ -187,7 +187,7 @@ struct buf_head* getblk(int dev, int block)
 		// 先判断缓冲区是否命中
 		struct buf_head* bh = get_buf(dev, block);
 		// 命中后直接返回
-		if (bh) { release(&buf_lock); bh->count ++; return bh; }
+		if (bh) { release(&buf_lock); acquire(&bh->lock); bh->count ++; return bh; }
 		// 没有命中，那么重新分配一个缓冲块
 		else
 			grow_buf(dev, block);
@@ -197,6 +197,7 @@ struct buf_head* getblk(int dev, int block)
 // 释放缓冲块的使用权
 static void brelse(struct buf_head* b)
 {
+	release(&b->lock);
 	acquire(&buf_lock);
 	b->count --;
 	// if (!b->count)
