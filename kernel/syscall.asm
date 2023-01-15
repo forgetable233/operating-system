@@ -377,6 +377,6 @@ bh_refresh:
 ;    refresh hd buffer       bh_refresh		//add by dcr 2023-01-15
 ; ====================================================================
 reset_flag:
-	mov	eax, _NR_bf_refresh
+	mov	eax, _NR_reset_flag
 	int	INT_VECTOR_SYS_CALL
 	ret

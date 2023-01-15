@@ -17,7 +17,7 @@ int main(int arg, char *argv[])  {
     begin = get_ticks();
     for (int j = 0; j < 78; j ++ )
     {
-        for (int i = 0; i < 4000; i++)
+        for (int i = 0; i < 1000; i++)
         {
             int tar = i % 4;
             char read_buf[128];
@@ -49,11 +49,11 @@ int main(int arg, char *argv[])  {
     reset_flag();
     printf("**********************************************\n");
     printf("not use buffer to read and write\n");
-      printf("[");
+    printf("[");
     begin = get_ticks();
     for (int j = 0; j < 78; j ++ )
     {
-        for (int i = 0; i < 400; i++)
+        for (int i = 0; i < 1000; i++)
         {
             int tar = i % 4;
             char read_buf[128];
