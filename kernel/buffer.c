@@ -28,7 +28,6 @@
 			 (dev - MINOR_hd1a) / NR_SUB_PER_DRIVE)
 
 
-// #define BUF_SIZE 64
 static u8 buf_cache[BUF_SIZE][SECTOR_SIZE];  // 缓冲区数据块
 /* 缓冲块状态，
 CLEAN表示缓冲块数据与磁盘数据同步，
@@ -46,6 +45,7 @@ struct buf_head
 	void* pos;            	// 该缓冲块的起始地址, 为cache的地址
 	struct buf_head* pre;   // LRU链表指针，指向LRU链表的前一个元素
 	struct buf_head* nxt; 	// 指向下一个缓冲块头部
+	int lock;               // 锁
 };
 
 static struct buf_head bh[BUF_SIZE];
