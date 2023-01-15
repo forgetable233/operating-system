@@ -21,6 +21,7 @@
 #include "x86.h"
 #include "stdio.h"
 #include "assert.h"
+#include "spinlock.h"
 
 
 #define	DRV_OF_DEV(dev) (dev <= MAX_PRIM ? \
@@ -48,6 +49,7 @@ struct buf_head
 	int lock;               // 锁
 };
 
+static struct spinlock buf_lock;
 static struct buf_head bh[BUF_SIZE];
 static struct buf_head head;            // 链表的头结点
 
@@ -103,6 +105,7 @@ void free_buf(struct buf_head* bh);
 
 void init_buf()
 {
+	initlock(&buf_lock, "bufferlock");
 	head.pre = &head, head.nxt = &head;
 	free_que.front = free_que.rear = 0;
 	for (int i = 0; i < BUF_SIZE; i ++ )
@@ -116,6 +119,7 @@ void init_buf()
 		bh[i].pre = &head;
 		head.nxt->pre = &bh[i];
 		head.nxt = &bh[i];
+		bh[i].lock = 0;
 		push_to_free(&bh[i]);
 	}
 }
@@ -177,12 +181,13 @@ static struct buf_head* get_buf(int dev, int block)
 
 struct buf_head* getblk(int dev, int block)
 {
+	acquire(&buf_lock);
 	for (;;)
 	{
 		// 先判断缓冲区是否命中
 		struct buf_head* bh = get_buf(dev, block);
 		// 命中后直接返回
-		if (bh) { bh->count ++; return bh; }
+		if (bh) { release(&buf_lock); bh->count ++; return bh; }
 		// 没有命中，那么重新分配一个缓冲块
 		else
 			grow_buf(dev, block);
@@ -192,6 +197,7 @@ struct buf_head* getblk(int dev, int block)
 // 释放缓冲块的使用权
 static void brelse(struct buf_head* b)
 {
+	acquire(&buf_lock);
 	b->count --;
 	// if (!b->count)
 	{
@@ -204,6 +210,7 @@ static void brelse(struct buf_head* b)
 		head.nxt->pre = b;
 		head.nxt = b;
 	}
+	release(&buf_lock);
 }
 
 // 将(dev, block)这个数据块的数据读入到addr这个地址，读入数据的大小为size
