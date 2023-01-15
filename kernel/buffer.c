@@ -155,9 +155,9 @@ static void grow_buf(int dev, int block)
 		return;
 	}
 	// 如果该缓冲块的状态为DIRTY，那么需要先将缓冲块中的数据写入磁盘，然后分配给新的数据块
-	u8 hdbuf[512];
-	memcpy(hdbuf, bhead->pos, SECTOR_SIZE);
-	WR_SECT_BUF(bhead->dev, bhead->block, hdbuf);
+	// u8 hdbuf[512];
+	// memcpy(hdbuf, bhead->pos, SECTOR_SIZE);
+	WR_SECT_BUF(bhead->dev, bhead->block, bhead->pos);
 	bhead->dev = dev, bhead->block = block;
 	bhead->state = UNUSED;
 	return;
@@ -218,9 +218,7 @@ void read_buf(void* addr, int dev, int block, int size)
 		return;
 	} else if (bh->state == UNUSED) {
 		// 先将磁盘中的数据读入到缓冲块中
-		u8 hdbuf[512];
-		RD_SECT_BUF(dev, block, hdbuf);
-		memcpy(bh->pos, hdbuf, SECTOR_SIZE);
+		RD_SECT_BUF(dev, block, bh->pos);
 		// 该缓冲块的状态更新为CLEAN
 		bh->state = CLEAN;
 		// 接下来从缓冲块中读取数据
