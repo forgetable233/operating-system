@@ -21,6 +21,9 @@
 #include "x86.h"
 #include "stdio.h"
 #include "assert.h"
+#include "time.h"
+
+bool use_buf = true;
 
 
 #define	DRV_OF_DEV(dev) (dev <= MAX_PRIM ? \
@@ -209,6 +212,17 @@ static void brelse(struct buf_head* b)
 // 将(dev, block)这个数据块的数据读入到addr这个地址，读入数据的大小为size
 void read_buf(void* addr, int dev, int block, int size)
 {
+	assert(size <= 512);
+	if (!use_buf) {
+		// u8 hdbuf[512];
+		rw_sector(	DEV_READ, 
+					dev, 
+					block * SECTOR_SIZE, 
+					size, 
+					proc2pid(p_proc_current), 
+					addr);
+		return;
+	}
 	struct buf_head* bh;
 	bh = getblk(dev, block);
 	if (bh->state == CLEAN || bh->state == DIRTY)
@@ -232,6 +246,16 @@ void read_buf(void* addr, int dev, int block, int size)
 
 void write_buf(void* addr, int dev, int block, int size)
 {
+	assert(size <= 512);
+	if (!use_buf) {
+		rw_sector(	DEV_WRITE, 
+					dev, 
+					block * SECTOR_SIZE, 
+					size, 
+					proc2pid(p_proc_current), 
+					addr);
+		return;
+	}
 	struct buf_head* bh;
 	bh = getblk(dev, block);
 	
@@ -288,5 +312,15 @@ int do_refresh() {
 }
 
 int sys_bh_refresh() {
+	
 	return do_refresh();
+}
+int do_reset_flag() {
+	use_buf = false;
+	kprintf("\nthe flag is false\n");
+	return 0;
+}
+
+int sys_reset_flag(){
+	return do_reset_flag();
 }
