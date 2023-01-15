@@ -321,6 +321,7 @@ void read_buf(void* addr, int dev, int block, int size);
 void write_buf(void* addr, int dev, int block, int size);
 void Free_buf(int dev, int block);
 struct buf_head* getblk(int dev, int block);
+void brelse(int dev, int block);
 // void refresh_buf();
 // void free_buf(struct buf_head* bh);
 

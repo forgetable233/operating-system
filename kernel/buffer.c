@@ -95,6 +95,7 @@ static int rw_sector(int io_type, int dev, u64 pos, int bytes, int proc_nr, void
 }
 
 void free_buf(struct buf_head* bh);
+static void push_to_top(struct buf_head* bh);
 
 
 /*****************************************************************************
@@ -112,10 +113,12 @@ void init_buf()
 		bh[i].state = UNUSED;
 		bh[i].dev = 0, bh->block = 0;
 		bh[i].pos = (void*)buf_cache[i];
-		bh[i].nxt = head.nxt;
-		bh[i].pre = &head;
-		head.nxt->pre = &bh[i];
-		head.nxt = &bh[i];
+		bh[i].nxt = NULL;
+		bh[i].pre = NULL;
+		// bh[i].nxt = head.nxt;
+		// bh[i].pre = &head;
+		// head.nxt->pre = &bh[i];
+		// head.nxt = &bh[i];
 		push_to_free(&bh[i]);
 	}
 }
@@ -133,19 +136,25 @@ static struct buf_head* get_free_buf(int dev, int block)
 	return bhead;
 }
 
+// 进行释放一个buf，使用LRU算法，供随后的分配使用
 static void grow_buf(int dev, int block)
 {
 	// 首先判断当前缓冲区中是否存在空闲缓冲块，如果存在，将该缓冲块分配给当前数据块
 	struct buf_head* bhead;
 	bhead = get_free_buf(dev, block);
-	if (bhead) return;
+	// 能找到空白块，进行分配操作
+	if (bhead) {
+		push_to_top(bhead);
+		return;
+	}
 	// 如果当前没有空闲的缓冲块，则将距离上次使用间隔最长的缓冲块写入磁盘
 	// bh表示即将分配给新的数据块的缓冲块，从LRU链表中搜索
 	// for (bhead = head.pre; bhead != &head; bhead = bhead->pre)
 	// 	if (bhead->count == 0) break;
 	bhead = head.pre;
-	// bhead = &bh[0];
 	assert(bhead != &head);
+	push_to_free(bhead);
+	// bhead = &bh[0];
 	// 如果该缓冲块的状态为CLEAN或者UNUSED，那么没必要写入磁盘，直接分配即可
 	if (bhead->state == CLEAN || bhead->state == UNUSED)
 	{
@@ -163,59 +172,118 @@ static void grow_buf(int dev, int block)
 	return;
 }
 
+static void push_to_top(struct buf_head* bh) {
+	assert(bh != NULL && bh != &head);
+	// 为命中时进行维护
+	if (bh->nxt != NULL && bh->pre != NULL) {
+    	bh->pre->nxt = bh->nxt;
+		bh->nxt->pre = bh->pre;
+		bh->pre = &head;
+		bh->nxt = head.nxt;
+		head.nxt->pre = bh;
+		head.nxt = bh;
+	} else {
+	// 为新加入的进行维护
+		bh->pre = &head;
+		bh->nxt = head.nxt;
+		head.nxt->pre = bh;
+		head.nxt = bh;
+	}
+}
+
+static void pop_from_LRU(struct buf_head* bh) {
+	assert(bh != NULL && bh != &head);
+	bh->pre->nxt = bh->nxt;
+	bh->nxt->pre = bh->pre;
+	bh->pre = bh->nxt = NULL;
+}
+
 static struct buf_head* get_buf(int dev, int block)
 {
-	for (int i = 0; i < BUF_SIZE; i ++ )
-	{
-		if (bh[i].busy == true && bh[i].dev == dev && bh[i].block == block)
-		{
-			return &bh[i];
+	// 先判断当前LRU是否为空
+	if (head.nxt == head.pre) {
+		return NULL;
+	}
+	int t = 0;
+	// 从当前的LRU中寻找目标
+	struct buf_head *temp_head = head.nxt;
+	for (; temp_head != &head; temp_head = temp_head->nxt){
+		// t++;
+		// kprintf("enter %d\n", t);
+		if (temp_head->busy && temp_head->dev == dev && temp_head->block == block) {
+			push_to_top(temp_head);
+			return temp_head;
 		}
 	}
+	// for (int i = 0; i < BUF_SIZE; i ++ )
+	// {
+	// 	if (bh[i].busy == true && bh[i].dev == dev && bh[i].block == block)
+	// 	{
+	// 		return &bh[i];
+	// 	}
+	// }
 	return NULL;
 }
 
 struct buf_head* getblk(int dev, int block)
 {
+	// int count = 0;
+	// for (int i = 0; i < BUF_SIZE; i++)
+	// {
+	// 	if (bh[i].busy)
+	// 	{
+	// 		count++;
+	// 	}
+		
+	// }
+	// kprintf("%d\n", count);
+	
 	for (;;)
 	{
+		// kprintf("enter\n");
 		// 先判断缓冲区是否命中
 		struct buf_head* bh = get_buf(dev, block);
 		// 命中后直接返回
-		if (bh) { bh->count ++; return bh; }
-		// 没有命中，那么重新分配一个缓冲块
+		if (bh) { 
+			bh->count ++; 
+			// kprintf("\nget buf return\n");
+			return bh; 
+		}
+		// 没有命中，那么重新分配一个缓冲块,并返回
 		else
 			grow_buf(dev, block);
 	}
 }
 
 // 释放缓冲块的使用权
-static void brelse(struct buf_head* b)
+void brelse(int dev, int block)
 {
-	b->count --;
-	// if (!b->count)
-	{
-		// 将该缓冲块从LRU链表中删除
-		b->nxt->pre = b->pre;
-		b->pre->nxt = b->nxt;
-		// 将该缓冲块添加到链表头
-		b->nxt = head.nxt;
-		b->pre = &head;
-		head.nxt->pre = b;
-		head.nxt = b;
-	}
+	kprintf("brelse\n");
+	// 首先找到对应的目标块
+	struct buf_head* b = getblk(dev, block);
+	assert(b && b != &head && b->busy);
+	free_buf(b);
+	// b->count = 0;
+	// 将该缓冲块从LRU链表中删除
+	// b->nxt->pre = b->pre;
+	// b->pre->nxt = b->nxt;
+	// 将该缓冲块添加到链表头
+	// b->nxt = head.nxt;
+	// b->pre = &head;
+	// head.nxt->pre = b;
+	// head.nxt = b;
 }
 
 // 将(dev, block)这个数据块的数据读入到addr这个地址，读入数据的大小为size
 void read_buf(void* addr, int dev, int block, int size)
 {
+	// kprintf("read\n");
 	struct buf_head* bh;
 	bh = getblk(dev, block);
 	if (bh->state == CLEAN || bh->state == DIRTY)
 	{
-		// kprintf("enter buffer\n")		;
 		memcpy(addr, bh->pos, size);
-		// free_buf(bh);
+		// TODO 命中后
 		return;
 	} else if (bh->state == UNUSED) {
 		// 先将磁盘中的数据读入到缓冲块中
@@ -227,18 +295,23 @@ void read_buf(void* addr, int dev, int block, int size)
 		// 接下来从缓冲块中读取数据
 		memcpy(addr, bh->pos, size);
 	}
-	brelse(bh);
+	// pop_from_LRU(bh);
+	// free_buf(bh);
+	// brelse(bh);
 	return;
 }
 
 void write_buf(void* addr, int dev, int block, int size)
 {
+	// kprintf("write\n");
 	struct buf_head* bh;
 	bh = getblk(dev, block);
 	
 	memcpy(bh->pos, addr, size);
 	bh->state = DIRTY;
-	brelse(bh);
+	// pop_from_LRU(bh);
+	// free_buf(bh);
+	// brelse(bh);
 	return;
 }
 
@@ -247,20 +320,21 @@ void free_buf(struct buf_head* bh) {
 
 	bh->busy = false;
 	bh->state = UNUSED;
+	pop_from_LRU(bh);
 	push_to_free(bh);
 	WR_SECT_BUF(bh->dev, bh->block, bh->pos);
 }
 
-void Free_buf(int dev, int block) {
-	struct buf_head* bh = getblk(dev, block);
-	if (bh->state == UNUSED) {
-		push_to_free(bh);
-		return;
-	} else {
-		free_buf(bh);
-		return;
-	}
-}
+// void Free_buf(int dev, int block) {
+// 	struct buf_head* bh = getblk(dev, block);
+// 	if (bh->state == UNUSED) {
+// 		push_to_free(bh);
+// 		return;
+// 	} else {
+// 		free_buf(bh);
+// 		return;
+// 	}
+// }
 
 // 清空缓冲区并写入硬盘
 void refresh_buf() {
