@@ -35,14 +35,14 @@ int main(int arg, char *argv[])  {
 
         int fd = open(file_path[tar], O_RDWR);
         read(fd, read_buf, 128);
-        printf("%s\n", read_buf);
+        // printf("%s\n", read_buf);
 
         fd = open(file_path[tar], O_RDWR);
         write(fd, write_buf, 128);
 
         fd = open(file_path[tar], O_RDWR);
         read(fd, read_buf, 128);
-        printf("%s\n", read_buf); 
+        // printf("%s\n", read_buf); 
     }
     
     // close(fd);
