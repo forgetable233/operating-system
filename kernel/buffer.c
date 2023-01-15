@@ -277,3 +277,16 @@ void refresh_buf() {
 		// }
 	}
 }
+
+int do_refresh() {
+	for (int i = 0; i < BUF_SIZE; i++) {
+		if (bh[i].busy) {
+			brelse(&bh[i]);
+		}
+	}
+	return 0;
+}
+
+int sys_bh_refresh() {
+	return do_refresh();
+}

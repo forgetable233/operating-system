@@ -36,7 +36,7 @@ int main(int arg, char *argv[])  {
     }
     printf("]");
     printf("The test has been finished!\n");
-    
+    bh_refresh();
     // close(fd);
     return 0;
 }
