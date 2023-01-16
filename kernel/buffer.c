@@ -46,7 +46,7 @@ struct buf_head
 	void* pos;            	// 该缓冲块的起始地址, 为cache的地址
 	struct buf_head* pre;   // LRU链表指针，指向LRU链表的前一个元素
 	struct buf_head* nxt; 	// 指向下一个缓冲块头部
-	struct spinlock lock;               // 锁
+	u32 lock;               // 锁
 };
 
 static struct spinlock buf_lock;
@@ -119,7 +119,7 @@ void init_buf()
 		bh[i].pre = &head;
 		head.nxt->pre = &bh[i];
 		head.nxt = &bh[i];
-		initlock(&bh[i].lock, "bufferhead");
+		bh[i].lock = 0;
 		push_to_free(&bh[i]);
 	}
 }
@@ -161,7 +161,9 @@ static void grow_buf(int dev, int block)
 	// 如果该缓冲块的状态为DIRTY，那么需要先将缓冲块中的数据写入磁盘，然后分配给新的数据块
 	// u8 hdbuf[512];
 	// memcpy(hdbuf, bhead->pos, SECTOR_SIZE);
+	// enable_int();
 	WR_SECT_BUF(bhead->dev, bhead->block, bhead->pos);
+	// disable_int();
 	bhead->dev = dev, bhead->block = block;
 	bhead->state = UNUSED;
 	return;
@@ -187,7 +189,12 @@ struct buf_head* getblk(int dev, int block)
 		// 先判断缓冲区是否命中
 		struct buf_head* bh = get_buf(dev, block);
 		// 命中后直接返回
-		if (bh) { release(&buf_lock); acquire(&bh->lock); bh->count ++; return bh; }
+		if (bh) 
+		{
+			release(&buf_lock); 
+			bh->count ++; 
+			return bh; 
+		}
 		// 没有命中，那么重新分配一个缓冲块
 		else
 			grow_buf(dev, block);
@@ -197,7 +204,6 @@ struct buf_head* getblk(int dev, int block)
 // 释放缓冲块的使用权
 static void brelse(struct buf_head* b)
 {
-	release(&b->lock);
 	acquire(&buf_lock);
 	b->count --;
 	// if (!b->count)
@@ -217,6 +223,7 @@ static void brelse(struct buf_head* b)
 // 将(dev, block)这个数据块的数据读入到addr这个地址，读入数据的大小为size
 void read_buf(void* addr, int dev, int block, int size)
 {
+	// disable_int();
 	struct buf_head* bh;
 	bh = getblk(dev, block);
 	if (bh->state == CLEAN || bh->state == DIRTY)
@@ -225,25 +232,30 @@ void read_buf(void* addr, int dev, int block, int size)
 		// free_buf(bh);
 		return;
 	} else if (bh->state == UNUSED) {
+		// enable_int();
 		// 先将磁盘中的数据读入到缓冲块中
 		RD_SECT_BUF(dev, block, bh->pos);
+		// disable_int();
 		// 该缓冲块的状态更新为CLEAN
 		bh->state = CLEAN;
 		// 接下来从缓冲块中读取数据
 		memcpy(addr, bh->pos, size);
 	}
 	brelse(bh);
+	// enable_int();
 	return;
 }
 
 void write_buf(void* addr, int dev, int block, int size)
 {
+	// disable_int();
 	struct buf_head* bh;
 	bh = getblk(dev, block);
 	
 	memcpy(bh->pos, addr, size);
 	bh->state = DIRTY;
 	brelse(bh);
+	// disable_int();
 	return;
 }
 
