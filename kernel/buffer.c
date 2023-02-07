@@ -206,6 +206,13 @@ static void brelse(struct buf_head* b)
 		b->pre = &head;
 		head.nxt->pre = b;
 		head.nxt = b;
+
+		rw_sector(DEV_WRITE, 
+		b->dev, 
+		b->block * SECTOR_SIZE, 
+		SECTOR_SIZE, 
+		proc2pid(p_proc_current),
+		b->pos);
 	}
 }
 
@@ -240,7 +247,7 @@ void read_buf(void* addr, int dev, int block, int size)
 		// 接下来从缓冲块中读取数据
 		memcpy(addr, bh->pos, size);
 	}
-	brelse(bh);
+	// brelse(bh);
 	return;
 }
 
@@ -261,7 +268,7 @@ void write_buf(void* addr, int dev, int block, int size)
 	
 	memcpy(bh->pos, addr, size);
 	bh->state = DIRTY;
-	brelse(bh);
+	// brelse(bh);
 	return;
 }
 
