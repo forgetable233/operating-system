@@ -229,7 +229,7 @@ void read_buf(void* addr, int dev, int block, int size)
 	{
 		memcpy(addr, bh->pos, size);
 		// free_buf(bh);
-		return;
+		// return;
 	} else if (bh->state == UNUSED) {
 		// 先将磁盘中的数据读入到缓冲块中
 		u8 hdbuf[512];
