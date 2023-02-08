@@ -18,7 +18,7 @@ int main(int arg, char *argv[])
 	char buf[1024] = "orange/RWFile.bin";
 	int pid;
 	int times = 0;
-	// refresh_buf();
+	bh_refresh();
 	while (1)
 	{
 		struct buf_head* test;

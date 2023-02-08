@@ -275,7 +275,7 @@ struct hd_info
 #define ATA_IDENTIFY		0xEC
 #define ATA_READ		0x20
 #define ATA_WRITE		0x30
-#define BUF_SIZE        64
+#define BUF_SIZE        8
 /* for DEVICE register. */
 #define	MAKE_DEVICE_REG(lba,drv,lba_highest) (((lba) << 6) |		\
 					      ((drv) << 4) |		\
@@ -311,6 +311,8 @@ typedef struct
 				       proc2pid(p_proc_current),				\
 				       fsbuf);
 
+int sys_reset_flag();
+int sys_bh_refresh();
 void init_hd();
 void hd_open(int device);
 void hd_close(int device);

@@ -53,20 +53,4 @@ release(struct spinlock *lock)
 }
 
 
-void
-initmutex(struct mutex *lock, char *name)
-{
-  initlock(&lock->lk, name);
-  lock->name = name;
-  lock->locked = 0;
-  lock->cpu = 0xffffffff;
-}
 
-
-void
-acquiremutex(struct mutex *lock)
-{
-
-  acquire(&lock->lk);
-  
-}

@@ -21,7 +21,9 @@
 #include "x86.h"
 #include "stdio.h"
 #include "assert.h"
-#include "spinlock.h"
+#include "time.h"
+
+bool use_buf = true;
 
 
 #define	DRV_OF_DEV(dev) (dev <= MAX_PRIM ? \
@@ -29,6 +31,7 @@
 			 (dev - MINOR_hd1a) / NR_SUB_PER_DRIVE)
 
 
+// #define BUF_SIZE 64
 static u8 buf_cache[BUF_SIZE][SECTOR_SIZE];  // 缓冲区数据块
 /* 缓冲块状态，
 CLEAN表示缓冲块数据与磁盘数据同步，
@@ -46,10 +49,8 @@ struct buf_head
 	void* pos;            	// 该缓冲块的起始地址, 为cache的地址
 	struct buf_head* pre;   // LRU链表指针，指向LRU链表的前一个元素
 	struct buf_head* nxt; 	// 指向下一个缓冲块头部
-	u32 lock;               // 锁
 };
 
-static struct spinlock buf_lock;
 static struct buf_head bh[BUF_SIZE];
 static struct buf_head head;            // 链表的头结点
 
@@ -105,7 +106,6 @@ void free_buf(struct buf_head* bh);
 
 void init_buf()
 {
-	initlock(&buf_lock, "bufferlock");
 	head.pre = &head, head.nxt = &head;
 	free_que.front = free_que.rear = 0;
 	for (int i = 0; i < BUF_SIZE; i ++ )
@@ -119,7 +119,6 @@ void init_buf()
 		bh[i].pre = &head;
 		head.nxt->pre = &bh[i];
 		head.nxt = &bh[i];
-		bh[i].lock = 0;
 		push_to_free(&bh[i]);
 	}
 }
@@ -159,11 +158,9 @@ static void grow_buf(int dev, int block)
 		return;
 	}
 	// 如果该缓冲块的状态为DIRTY，那么需要先将缓冲块中的数据写入磁盘，然后分配给新的数据块
-	// u8 hdbuf[512];
-	// memcpy(hdbuf, bhead->pos, SECTOR_SIZE);
-	// enable_int();
-	WR_SECT_BUF(bhead->dev, bhead->block, bhead->pos);
-	// disable_int();
+	u8 hdbuf[512];
+	memcpy(hdbuf, bhead->pos, SECTOR_SIZE);
+	WR_SECT_BUF(bhead->dev, bhead->block, hdbuf);
 	bhead->dev = dev, bhead->block = block;
 	bhead->state = UNUSED;
 	return;
@@ -183,18 +180,12 @@ static struct buf_head* get_buf(int dev, int block)
 
 struct buf_head* getblk(int dev, int block)
 {
-	acquire(&buf_lock);
 	for (;;)
 	{
 		// 先判断缓冲区是否命中
 		struct buf_head* bh = get_buf(dev, block);
 		// 命中后直接返回
-		if (bh) 
-		{
-			release(&buf_lock); 
-			bh->count ++; 
-			return bh; 
-		}
+		if (bh) { bh->count ++; return bh; }
 		// 没有命中，那么重新分配一个缓冲块
 		else
 			grow_buf(dev, block);
@@ -204,7 +195,6 @@ struct buf_head* getblk(int dev, int block)
 // 释放缓冲块的使用权
 static void brelse(struct buf_head* b)
 {
-	acquire(&buf_lock);
 	b->count --;
 	// if (!b->count)
 	{
@@ -217,13 +207,22 @@ static void brelse(struct buf_head* b)
 		head.nxt->pre = b;
 		head.nxt = b;
 	}
-	release(&buf_lock);
 }
 
 // 将(dev, block)这个数据块的数据读入到addr这个地址，读入数据的大小为size
 void read_buf(void* addr, int dev, int block, int size)
 {
-	// disable_int();
+	assert(size <= 512);
+	if (!use_buf) {
+		// u8 hdbuf[512];
+		rw_sector(	DEV_READ, 
+					dev, 
+					block * SECTOR_SIZE, 
+					size, 
+					proc2pid(p_proc_current), 
+					addr);
+		return;
+	}
 	struct buf_head* bh;
 	bh = getblk(dev, block);
 	if (bh->state == CLEAN || bh->state == DIRTY)
@@ -232,30 +231,37 @@ void read_buf(void* addr, int dev, int block, int size)
 		// free_buf(bh);
 		return;
 	} else if (bh->state == UNUSED) {
-		// enable_int();
 		// 先将磁盘中的数据读入到缓冲块中
-		RD_SECT_BUF(dev, block, bh->pos);
-		// disable_int();
+		u8 hdbuf[512];
+		RD_SECT_BUF(dev, block, hdbuf);
+		memcpy(bh->pos, hdbuf, SECTOR_SIZE);
 		// 该缓冲块的状态更新为CLEAN
 		bh->state = CLEAN;
 		// 接下来从缓冲块中读取数据
 		memcpy(addr, bh->pos, size);
 	}
 	brelse(bh);
-	// enable_int();
 	return;
 }
 
 void write_buf(void* addr, int dev, int block, int size)
 {
-	// disable_int();
+	assert(size <= 512);
+	if (!use_buf) {
+		rw_sector(	DEV_WRITE, 
+					dev, 
+					block * SECTOR_SIZE, 
+					size, 
+					proc2pid(p_proc_current), 
+					addr);
+		return;
+	}
 	struct buf_head* bh;
 	bh = getblk(dev, block);
 	
 	memcpy(bh->pos, addr, size);
 	bh->state = DIRTY;
 	brelse(bh);
-	// disable_int();
 	return;
 }
 
@@ -294,4 +300,27 @@ void refresh_buf() {
 		// 	kprintf("\nwrite hd\n");
 		// }
 	}
+}
+
+int do_refresh() {
+	for (int i = 0; i < BUF_SIZE; i++) {
+		if (bh[i].busy) {
+			brelse(&bh[i]);
+		}
+	}
+	return 0;
+}
+
+int sys_bh_refresh() {
+	
+	return do_refresh();
+}
+int do_reset_flag() {
+	use_buf = false;
+	kprintf("\nthe flag is false\n");
+	return 0;
+}
+
+int sys_reset_flag(){
+	return do_reset_flag();
 }

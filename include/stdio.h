@@ -40,6 +40,10 @@ int lseek(int fd, int offset, int whence);		//added by xw, 18/6/19
 int unlink(const char *pathname);				//added by xw, 18/6/19
 //~xw
 
+// 添加缓冲区刷新函数
+void bh_refresh();
+void reset_flag();
+
 /*string.asm*/
 long strtol(const char *cp,char **endp,unsigned int base);
 

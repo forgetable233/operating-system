@@ -1,12 +1,14 @@
 #include "stdio.h"
 #include "fs.h"
 #include "vfs.h"
+#include "time.h"
 #include "string.h"
 
-const char* file_path[4] = {"dev_tty0/test.txt", 
-                            "dev_tty0/test2.txt", 
-                            "dev_tty0/test3.txt", 
-                            "dev_tty0/test4.txt"};
+const char* file_path[4] = {"orange/test.txt", 
+                            "orange/test2.txt", 
+                            "orange/test3.txt", 
+                            "orange/test4.txt"};
+
 
 void test_read(int file_id, char* buf)
 {
@@ -37,13 +39,13 @@ int test(int i, int j)
 }
 
 int main(int arg, char *argv[])  {
-    int start = get_ticks();
-
-
+    printf("begin to read and write using buffer\n");
     printf("[");
+    int begin, end;
+    begin = get_ticks();
     for (int j = 0; j < 78; j ++ )
     {
-        for (int i = 0; i < 200; i++)
+        for (int i = 0; i < 50; i++)
         {
             if (test(i, j) == -1)
             {
@@ -53,12 +55,34 @@ int main(int arg, char *argv[])  {
         }
         printf("*");
     }
+    end = get_ticks();
     printf("]");
-
-    // if (test(0, 0) == -1) printf("Test faile!\n");
-    int end = get_ticks();
-    printf("The test has been finished!\nTotal time spent: %d ticks\n", end - start);
-    
+    printf("The test has been finished!\n");
+    printf("The time cost is %d \n", end - begin);
+    // printf("**********************************************\n\n");
     // close(fd);
+    bh_refresh();
+    reset_flag();
+    // printf("**********************************************\n");
+    printf("not use buffer to read and write\n");
+      printf("[");
+    begin = get_ticks();
+    for (int j = 0; j < 78; j ++ )
+    {
+        for (int i = 0; i < 50; i++)
+        {
+            if (test(i, j) == -1)
+            {
+                printf("Test failed!\n");
+                break;
+            }
+        }
+        printf("*");
+    }
+    end = get_ticks();
+    printf("]");
+    printf("The test has been finished!\n");
+    printf("The time cost is %d \n", end - begin);
+    // printf("**********************************************\n\n");
     return 0;
 }
