@@ -62,7 +62,7 @@ int main(int arg, char *argv[])  {
     // printf("**********************************************\n\n");
     // close(fd);
     bh_refresh();
-    reset_flag();
+    close_buf();
     // printf("**********************************************\n");
     printf("not use buffer to read and write\n");
       printf("[");
