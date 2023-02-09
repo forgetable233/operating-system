@@ -2,10 +2,7 @@
 #include "fs.h"
 #include "vfs.h"
 #include "time.h"
-<<<<<<< HEAD
-=======
 #include "string.h"
->>>>>>> lxc_dev
 
 const char* file_path[4] = {"orange/test.txt", 
                             "orange/test2.txt", 
@@ -42,21 +39,13 @@ int test(int i, int j)
 }
 
 int main(int arg, char *argv[])  {
-<<<<<<< HEAD
-    printf("**********************************************\n");
-=======
->>>>>>> lxc_dev
     printf("begin to read and write using buffer\n");
     printf("[");
     int begin, end;
     begin = get_ticks();
     for (int j = 0; j < 78; j ++ )
     {
-<<<<<<< HEAD
-        for (int i = 0; i < 1000; i++)
-=======
         for (int i = 0; i < 50; i++)
->>>>>>> lxc_dev
         {
             if (test(i, j) == -1)
             {
@@ -70,37 +59,6 @@ int main(int arg, char *argv[])  {
     printf("]");
     printf("The test has been finished!\n");
     printf("The time cost is %d \n", end - begin);
-<<<<<<< HEAD
-    printf("**********************************************\n\n");
-    // close(fd);
-    bh_refresh();
-    reset_flag();
-    printf("**********************************************\n");
-    printf("not use buffer to read and write\n");
-    printf("[");
-    begin = get_ticks();
-    for (int j = 0; j < 78; j ++ )
-    {
-        for (int i = 0; i < 1000; i++)
-        {
-            int tar = i % 4;
-            char read_buf[128];
-            char write_buf[128] = "Never gonna give you up!";
-
-            int fd = open(file_path[tar], O_RDWR);
-            read(fd, read_buf, 128);
-            // printf("%s\n", read_buf);
-            close(fd);
-
-            fd = open(file_path[tar], O_RDWR);
-            write(fd, write_buf, 128);
-            close(fd);
-
-            fd = open(file_path[tar], O_RDWR);
-            read(fd, read_buf, 128);
-            close(fd);
-            // printf("%s\n", read_buf); 
-=======
     // printf("**********************************************\n\n");
     // close(fd);
     bh_refresh();
@@ -118,7 +76,6 @@ int main(int arg, char *argv[])  {
                 printf("Test failed!\n");
                 break;
             }
->>>>>>> lxc_dev
         }
         printf("*");
     }
@@ -126,10 +83,6 @@ int main(int arg, char *argv[])  {
     printf("]");
     printf("The test has been finished!\n");
     printf("The time cost is %d \n", end - begin);
-<<<<<<< HEAD
-    printf("**********************************************\n\n");
-=======
     // printf("**********************************************\n\n");
->>>>>>> lxc_dev
     return 0;
 }

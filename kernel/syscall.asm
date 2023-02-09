@@ -38,11 +38,7 @@ _NR_opendir 		equ 25 ;    //added by mingxuan 2019-5-17
 _NR_createdir  		equ 26 ;    //added by mingxuan 2019-5-17
 _NR_deletedir   	equ 27 ;    //added by mingxuan 2019-5-17
 _NR_bf_refresh		equ 28
-<<<<<<< HEAD
-_NR_reset_flag		equ 29
-=======
 _NR_close_buf		equ 29
->>>>>>> lxc_dev
 
 INT_VECTOR_SYS_CALL	equ 0x90
 
@@ -79,11 +75,7 @@ global	createdir	;		//added by mingxuan 2019-5-17
 global  deletedir	;		//added by mingxuan 2019-5-17
 
 global bh_refresh
-<<<<<<< HEAD
-global reset_flag
-=======
 global close_buf
->>>>>>> lxc_dev
 
 bits 32
 [section .text]
@@ -384,12 +376,7 @@ bh_refresh:
 ; ====================================================================
 ;    refresh hd buffer       bh_refresh		//add by dcr 2023-01-15
 ; ====================================================================
-<<<<<<< HEAD
-reset_flag:
-	mov	eax, _NR_reset_flag
-=======
 close_buf:
 	mov	eax, _NR_close_buf
->>>>>>> lxc_dev
 	int	INT_VECTOR_SYS_CALL
 	ret
