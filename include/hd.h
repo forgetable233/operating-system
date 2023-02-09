@@ -311,7 +311,11 @@ typedef struct
 				       proc2pid(p_proc_current),				\
 				       fsbuf);
 
+<<<<<<< HEAD
 int sys_reset_flag();
+=======
+int sys_close_buf();
+>>>>>>> lxc_dev
 int sys_bh_refresh();
 void init_hd();
 void hd_open(int device);

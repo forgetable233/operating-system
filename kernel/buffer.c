@@ -308,7 +308,6 @@ int do_refresh() {
 			brelse(&bh[i]);
 		}
 	}
-	// kprintf("\n*************finish refresh*************\n");
 	return 0;
 }
 
@@ -316,12 +315,12 @@ int sys_bh_refresh() {
 	
 	return do_refresh();
 }
-int do_reset_flag() {
+int do_close_buf() {
 	use_buf = false;
-	// kprintf("\n*************the flag is false*************\n");
+	kprintf("\nthe flag is false\n");
 	return 0;
 }
 
-int sys_reset_flag(){
-	return do_reset_flag();
+int sys_close_buf(){
+	return do_close_buf();
 }

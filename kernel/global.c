@@ -80,7 +80,7 @@ system_call sys_call_table[NR_SYS_CALL] = {
     sys_createdir,  // added by mingxuan 2019-5-17
     sys_deletedir,  // added by mingxuan 2019-5-17
     sys_bh_refresh, // added by dcr 2023-01-15
-    sys_reset_flag
+    sys_close_buf  
 };
 
 TTY tty_table[NR_CONSOLES];	    // added by mingxuan 2019-5-19
