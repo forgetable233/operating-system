@@ -322,7 +322,7 @@ int sys_bh_refresh() {
 }
 int do_close_buf() {
 	use_buf = false;
-	kprintf("\nthe flag is false\n");
+	// kprintf("\nthe flag is false\n");
 	return 0;
 }
 
