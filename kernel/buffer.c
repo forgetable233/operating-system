@@ -305,7 +305,7 @@ void refresh_buf() {
 int do_refresh() {
 	for (int i = 0; i < BUF_SIZE; i++) {
 		if (bh[i].busy) {
-			brelse(&bh[i]);
+			free_buf(&bh[i]);
 		}
 	}
 	return 0;
@@ -317,7 +317,6 @@ int sys_bh_refresh() {
 }
 int do_close_buf() {
 	use_buf = false;
-	kprintf("\nthe flag is false\n");
 	return 0;
 }
 
